@@ -7,6 +7,8 @@ import { getDayId, getWeekId } from '../../lib/dates'
 import AffirmationStep from './steps/AffirmationStep'
 import { BASE_AFFIRMATIONS } from '../../lib/affirmations'
 import BreakfastStep from './steps/BreakfastStep'
+import TransitionStep from './steps/TransitionStep'
+import TasksPage from '../tasks/TasksPage'
 
 type WeeksMap = Record<string, WeekData>
 
@@ -138,6 +140,7 @@ export default function MorningFlow() {
             'affirmation',
             'breakfast',
             'transition',
+            'tasks'
         ]
 
         const currentIndex = order.indexOf(step)
@@ -189,12 +192,23 @@ export default function MorningFlow() {
                 />
             )}
 
-            {step !== 'greeting' && step !== 'theme' && step !== 'affirmation' && (
-                <>
-                    <h2>Current step: {step}</h2>
-                    <button onClick={next}>Next</button>
-                </>
+            {step === 'transition' && <TransitionStep onDone={next} />}
+
+            {step === 'tasks' && (
+                <TasksPage weeklyTheme={weeklyTheme} dailyAffirmation={dailyAffirmation} />
             )}
+
+            {step !== 'greeting' &&
+                step !== 'theme' &&
+                step !== 'affirmation' &&
+                step !== 'breakfast' &&
+                step !== 'transition' &&
+                step !== 'tasks' && (
+                    <>
+                        <h2>Current step: {step}</h2>
+                        <button onClick={next}>Next</button>
+                    </>
+                )}
             
         </main>
     )

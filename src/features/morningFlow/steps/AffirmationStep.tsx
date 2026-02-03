@@ -1,4 +1,5 @@
-import { motion } from 'framer-motion'
+import { useState } from 'react'
+import TypingText from '../../../components/TypingText'
 
 type Props = {
     dailyAffirmation: string
@@ -6,52 +7,58 @@ type Props = {
     onRefresh: () => void
 }
 
-export default function AffirmationStep({ dailyAffirmation, onConfirm, onRefresh }: Props) {
+export default function AffirmationStep({
+    dailyAffirmation,
+    onConfirm,
+    onRefresh,
+}: Props) {
+    const [introDone, setIntroDone] = useState(false)
+    const [affirmationDone, setAffirmationDone] = useState(false)
+
     return (
-        <motion.section
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.35 }}
-            style={{ display: 'grid', gap: '1.25rem' }}
-        >
-            <div style={{ display: 'grid', gap: '0.5rem' }}>
-                <p style={{ margin: 0, color: 'var(--muted)' }}>Remember,</p>
+        <section style={{ display: 'grid', gap: '1rem' }}>
+            <TypingText
+                text="Remember,"
+                speed={55}
+                onComplete={() => setIntroDone(true)}
+            />
 
-                <h2 style={{ margin: 0, lineHeight: 1.3, fontWeight: 500 }}>
-                    “{dailyAffirmation}”
-                </h2>
-            </div>
-            <div style={{ display: 'flex', gap: '0.75rem' }}>
-                <button
-                    onClick={onConfirm}
-                    style={{
-                        width: 'fit-content',
-                        padding: '0.7rem 1rem',
-                        borderRadius: 12,
-                        border: '1px solid #d1d5db',
-                        background: 'white',
-                        fontSize: '1rem',
-                    }}
-                >
-                    That’s right!
-                </button>
+            {introDone && (
+                <TypingText
+                    text={`“${dailyAffirmation}”`}
+                    speed={45}
+                    onComplete={() => setAffirmationDone(true)}
+                />
+            )}
 
-                <button
-                    onClick={onRefresh}
-                    style={{
-                        width: 'fit-content',
-                        padding: '0.7rem 1rem',
-                        borderRadius: 12,
-                        border: '1px solid #d1d5db',
-                        background: 'transparent',
-                        fontSize: '1rem',
-                        color: 'var(--muted)',
-                    }}
-                >
-                    Give me another
-                </button>
-            </div>
+            {affirmationDone && (
+                <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem' }}>
+                    <button
+                        onClick={onConfirm}
+                        style={{
+                            padding: '0.7rem 1rem',
+                            borderRadius: 12,
+                            border: '1px solid #d1d5db',
+                            background: 'white',
+                        }}
+                    >
+                        That’s right!
+                    </button>
 
-        </motion.section>
+                    <button
+                        onClick={onRefresh}
+                        style={{
+                            padding: '0.7rem 1rem',
+                            borderRadius: 12,
+                            border: '1px solid #d1d5db',
+                            background: 'transparent',
+                            color: 'var(--muted)',
+                        }}
+                    >
+                        Give me another
+                    </button>
+                </div>
+            )}
+        </section>
     )
 }

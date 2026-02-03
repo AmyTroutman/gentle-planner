@@ -4,6 +4,7 @@ export type MorningStep =
     | 'affirmation'
     | 'breakfast'
     | 'transition'
+    | 'tasks'
 
 export type Reflection = {
     id: string
