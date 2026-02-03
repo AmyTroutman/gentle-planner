@@ -15,7 +15,6 @@ import type { DailyMeals } from '../meals/meals.types'
 type WeeksMap = Record<string, WeekData>
 
 export default function MorningFlow() {
-    const [step, setStep] = useState<MorningStep>('greeting')
 
     const weekId = getWeekId()
     const dayId = getDayId()
@@ -25,6 +24,11 @@ export default function MorningFlow() {
     const [mealsByDay, setMealsByDay] = useLocalStorage<Record<string, DailyMeals>>(
         'gentlePlanner.mealsByDay',
         {}
+    )
+    const hasCompletedMorningFlow = Boolean(mealsByDay[dayId]?.breakfast)
+
+    const [step, setStep] = useState<MorningStep>(() =>
+        hasCompletedMorningFlow ? 'tasks' : 'greeting'
     )
 
     const todaysMeals: DailyMeals = mealsByDay[dayId] ?? { snacks: [], drinks: [] }
