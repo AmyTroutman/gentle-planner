@@ -1,8 +1,19 @@
 export type MorningStep =
     | 'greeting'
     | 'theme'
-    | 'reflection'
     | 'affirmation'
     | 'breakfast'
-    | 'drink'
     | 'transition'
+
+export type Reflection = {
+    id: string
+    text: string
+    createdAt: string // ISO string
+}
+
+export type WeekData = {
+    weekId: string
+    theme: string
+    reflections: Reflection[]
+    affirmationsByDay?: Record<string, string> // dayId -> affirmation
+}
