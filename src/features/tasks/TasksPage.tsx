@@ -30,6 +30,10 @@ type Props = {
     onDeleteSnack: (id: string) => void
     onAddDrink: (text: string) => void
     onDeleteDrink: (id: string) => void
+
+    // History
+    onOpenHistory: () => void
+
 }
 
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
@@ -70,7 +74,9 @@ export default function TasksPage({
     onAddSnack,
     onDeleteSnack,
     onDeleteDrink,
-    onAddDrink
+    onAddDrink,
+
+    onOpenHistory
 }: Props) {
     return (
         <section style={{ display: 'grid', gap: '1.25rem' }}>
@@ -83,6 +89,18 @@ export default function TasksPage({
                     <span style={{ color: 'var(--muted)' }}>Today: </span>
                     “{dailyAffirmation}”
                 </div>
+                <button
+                    onClick={onOpenHistory}
+                    style={{
+                        padding: '0.6rem 0.8rem',
+                        borderRadius: 12,
+                        border: '1px solid #d1d5db',
+                        background: 'white',
+                    }}
+                >
+                    History
+                </button>
+
             </header>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '1.25rem' }}>

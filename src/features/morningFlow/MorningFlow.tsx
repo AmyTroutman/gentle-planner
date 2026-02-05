@@ -11,6 +11,8 @@ import TransitionStep from './steps/TransitionStep'
 import TasksPage from '../tasks/TasksPage'
 import type { Task } from '../tasks/tasks.types'
 import type { DailyMeals } from '../meals/meals.types'
+import HistoryPage from '../history/HistoryPage'
+import WeeklyThemeSetupStep from './steps/WeeklyThemeSetupStep'
 
 type WeeksMap = Record<string, WeekData>
 
@@ -20,6 +22,23 @@ export default function MorningFlow() {
     const dayId = getDayId()
 
     const [weeks, setWeeks] = useLocalStorage<WeeksMap>('gentlePlanner.weeks', {})
+    const weekHasTheme = Boolean(weeks[weekId]?.theme?.trim())
+
+    useEffect(() => {
+        setWeeks((prev) => {
+            if (prev[weekId]) return prev
+            return {
+                ...prev,
+                [weekId]: {
+                    weekId,
+                    theme: '',
+                    reflections: [],
+                    affirmationsByDay: {},
+                    weeklyTasks: [],
+                },
+            }
+        })
+    }, [weekId, setWeeks])
 
     const [mealsByDay, setMealsByDay] = useLocalStorage<Record<string, DailyMeals>>(
         'gentlePlanner.mealsByDay',
@@ -27,9 +46,13 @@ export default function MorningFlow() {
     )
     const hasCompletedMorningFlow = Boolean(mealsByDay[dayId]?.breakfast)
 
-    const [step, setStep] = useState<MorningStep>(() =>
-        hasCompletedMorningFlow ? 'tasks' : 'greeting'
-    )
+    const [step, setStep] = useState<MorningStep>(() => {
+        if (!weekHasTheme) return 'weeklyThemeSetup'
+        if (hasCompletedMorningFlow) return 'tasks'
+        return 'greeting'
+    })
+
+    const [showHistory, setShowHistory] = useState(false)
 
     const todaysMeals: DailyMeals = mealsByDay[dayId] ?? { snacks: [], drinks: [] }
     
@@ -47,30 +70,43 @@ export default function MorningFlow() {
     const canCarryOverWeeklyTasks = prevUnfinishedCount > 0
 
     // For now: fallback theme if not set yet
-    const weeklyTheme = weeks[weekId]?.theme ?? 'kind'
+    const weeklyTheme = weeks[weekId]?.theme 
     const weeklyTasks = weeks[weekId]?.weeklyTasks ?? []
     const reflections = weeks[weekId]?.reflections ?? []
 
     useEffect(() => {
-        if (!weeks[weekId]?.affirmationsByDay?.[dayId]) {
+        if (!weekHasTheme && step !== 'weeklyThemeSetup') {
+            setStep('weeklyThemeSetup')
+        }
+    }, [weekHasTheme, step])
+
+    useEffect(() => {
+        const week = weeks[weekId]
+        if (!week) return
+
+        if (!week.affirmationsByDay[dayId]) {
             const affirmation = pickAffirmation()
+
             setWeeks((prev) => {
                 const existing = prev[weekId]
+                if (!existing) return prev
+
+                // double-check to avoid overwriting if it changed
+                if (existing.affirmationsByDay[dayId]) return prev
+
                 return {
                     ...prev,
                     [weekId]: {
-                        weekId,
-                        theme: existing?.theme ?? weeklyTheme,
-                        reflections: existing?.reflections ?? [],
+                        ...existing,
                         affirmationsByDay: {
-                            ...(existing?.affirmationsByDay ?? {}),
+                            ...existing.affirmationsByDay,
                             [dayId]: affirmation,
                         },
                     },
                 }
             })
         }
-    }, [weekId, dayId])
+    }, [weekId, dayId, weeks, setWeeks])
 
     function pickAffirmation(): string {
         const index = Math.floor(Math.random() * BASE_AFFIRMATIONS.length)
@@ -90,49 +126,68 @@ export default function MorningFlow() {
     }
 
     function setTodayAffirmation(affirmation: string) {
+        const cleaned = affirmation.trim()
+        if (!cleaned) return
+
         setWeeks((prev) => {
             const existing = prev[weekId]
-            const nextWeek: WeekData = {
-                weekId,
-                theme: existing?.theme ?? weeklyTheme,
-                reflections: existing?.reflections ?? [],
-                affirmationsByDay: {
-                    ...(existing?.affirmationsByDay ?? {}),
-                    [dayId]: affirmation,
+            if (!existing) return prev
+
+            return {
+                ...prev,
+                [weekId]: {
+                    ...existing,
+                    affirmationsByDay: {
+                        ...existing.affirmationsByDay,
+                        [dayId]: cleaned,
+                    },
                 },
             }
-            return { ...prev, [weekId]: nextWeek }
         })
     }
 
     const dailyAffirmation = getTodayAffirmation()
 
     function setWeekTheme(theme: string) {
-        setWeeks((prev) => ({
-            ...prev,
-            [weekId]: {
-                weekId,
-                theme,
-                reflections: prev[weekId]?.reflections ?? [],
-            },
-        }))
+        const cleaned = theme.trim()
+        if (!cleaned) return
+
+        setWeeks((prev) => {
+            const existing = prev[weekId]
+            if (!existing) return prev
+
+            return {
+                ...prev,
+                [weekId]: {
+                    ...existing,
+                    theme: cleaned,
+                },
+            }
+        })
     }
 
     function addReflection(text: string) {
+        const cleaned = text.trim()
+        if (!cleaned) return
+
         const newItem: Reflection = {
             id: crypto.randomUUID(),
-            text,
+            text: cleaned,
             createdAt: new Date().toISOString(),
+            dayId,
         }
 
         setWeeks((prev) => {
             const existing = prev[weekId]
-            const nextWeek: WeekData = {
-                weekId,
-                theme: existing?.theme ?? weeklyTheme,
-                reflections: [newItem, ...(existing?.reflections ?? [])],
+            if (!existing) return prev
+
+            return {
+                ...prev,
+                [weekId]: {
+                    ...existing,
+                    reflections: [newItem, ...existing.reflections],
+                },
             }
-            return { ...prev, [weekId]: nextWeek }
         })
     }
 
@@ -409,6 +464,17 @@ export default function MorningFlow() {
         <main style={{ padding: '3rem', maxWidth: 700 }}>
             {step === 'greeting' && <GreetingStep onDone={next} />}
 
+            {step === 'weeklyThemeSetup' && (
+                <WeeklyThemeSetupStep
+                    onSave={(theme) => {
+                        setWeekTheme(theme)
+                        // after setting theme, go to greeting or theme/reflection step
+                        setStep(hasCompletedMorningFlow ? 'tasks' : 'greeting')
+                    }}
+                    onSkip={() => setStep(hasCompletedMorningFlow ? 'tasks' : 'greeting')}
+                />
+            )}
+
             {step === 'theme' && (
                 <ThemeStep
                     weeklyTheme={weeklyTheme}
@@ -443,7 +509,7 @@ export default function MorningFlow() {
 
             {step === 'transition' && <TransitionStep onDone={next} />}
 
-            {step === 'tasks' && (
+            {step === 'tasks' && !showHistory && (
                 <TasksPage
                     weeklyTheme={weeklyTheme}
                     dailyAffirmation={dailyAffirmation}
@@ -464,6 +530,16 @@ export default function MorningFlow() {
                     onDeleteSnack={deleteSnack}
                     onAddDrink={addDrink}
                     onDeleteDrink={deleteDrink}
+                    onOpenHistory={() => setShowHistory(true)}
+                />
+            )}
+
+            {step === 'tasks' && showHistory && (
+                <HistoryPage
+                    weeks={weeks}
+                    tasksByDay={tasksByDay}
+                    mealsByDay={mealsByDay}
+                    onClose={() => setShowHistory(false)}
                 />
             )}
 
