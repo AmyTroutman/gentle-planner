@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
-import type { MorningStep, Reflection, WeekData } from './morningFlow.types'
+import type { MorningStep, Reflection, WeekData, WeeksMap } from './morningFlow.types'
 import { useLocalStorage } from '../../hooks/useLocalStorage'
 import GreetingStep from './steps/GreetingStep'
 import ThemeStep from './steps/ThemeStep'
-import { getDayId, getPreviousWeekId, getWeekId } from '../../lib/dates'
+import { getDayId, getWeekId } from '../../lib/dates'
 import AffirmationStep from './steps/AffirmationStep'
 import { BASE_AFFIRMATIONS } from '../../lib/affirmations'
 import BreakfastStep from './steps/BreakfastStep'
@@ -13,8 +13,7 @@ import type { Task } from '../tasks/tasks.types'
 import type { DailyMeals } from '../meals/meals.types'
 import HistoryPage from '../history/HistoryPage'
 import WeeklyThemeSetupStep from './steps/WeeklyThemeSetupStep'
-
-type WeeksMap = Record<string, WeekData>
+import WeeklyResetFlow from '../weeklyReset/WeeklyResetFlow'
 
 export default function MorningFlow() {
 
@@ -35,6 +34,10 @@ export default function MorningFlow() {
                     reflections: [],
                     affirmationsByDay: {},
                     weeklyTasks: [],
+                    weeklyReset: {
+                        completed: false,
+                        lookback: {},
+                    },
                 },
             }
         })
@@ -63,16 +66,12 @@ export default function MorningFlow() {
 
     const todaysTasks = tasksByDay[dayId] ?? []
 
-    const prevWeekId = getPreviousWeekId()
-    const prevUnfinishedCount =
-        (weeks[prevWeekId]?.weeklyTasks ?? []).filter((t) => !t.done).length
-
-    const canCarryOverWeeklyTasks = prevUnfinishedCount > 0
-
     // For now: fallback theme if not set yet
     const weeklyTheme = weeks[weekId]?.theme 
     const weeklyTasks = weeks[weekId]?.weeklyTasks ?? []
     const reflections = weeks[weekId]?.reflections ?? []
+
+    const [isWeeklyResetOpen, setIsWeeklyResetOpen] = useState(false)
 
     useEffect(() => {
         if (!weekHasTheme && step !== 'weeklyThemeSetup') {
@@ -418,48 +417,6 @@ export default function MorningFlow() {
         })
     }
 
-    function carryOverWeeklyTasks() {
-        const prevWeekId = getPreviousWeekId()
-        const prevWeek = weeks[prevWeekId]
-        const currentWeek = weeks[weekId]
-
-        const prevTasks = prevWeek?.weeklyTasks ?? []
-        const unfinished = prevTasks.filter((t) => !t.done)
-
-        if (unfinished.length === 0) return
-
-        // Prevent duplicates by title (simple + good enough for MVP)
-        const existingTitles = new Set(
-            (currentWeek?.weeklyTasks ?? []).map((t) => t.title.trim().toLowerCase())
-        )
-
-        const toAdd = unfinished
-            .filter((t) => !existingTitles.has(t.title.trim().toLowerCase()))
-            .map((t) => ({
-                ...t,
-                id: crypto.randomUUID(),
-                done: false,
-                doneAt: undefined,
-                createdAt: new Date().toISOString(),
-            }))
-
-        if (toAdd.length === 0) return
-
-        setWeeks((prev) => {
-            const existingCurrent = prev[weekId]
-            return {
-                ...prev,
-                [weekId]: {
-                    weekId,
-                    theme: existingCurrent?.theme ?? weeklyTheme,
-                    reflections: existingCurrent?.reflections ?? [],
-                    affirmationsByDay: existingCurrent?.affirmationsByDay ?? {},
-                    weeklyTasks: [...toAdd, ...(existingCurrent?.weeklyTasks ?? [])],
-                },
-            }
-        })
-    }
-
     return (
         <main style={{ padding: '3rem', maxWidth: 700 }}>
             {step === 'greeting' && <GreetingStep onDone={next} />}
@@ -509,29 +466,30 @@ export default function MorningFlow() {
 
             {step === 'transition' && <TransitionStep onDone={next} />}
 
-            {step === 'tasks' && !showHistory && (
-                <TasksPage
-                    weeklyTheme={weeklyTheme}
-                    dailyAffirmation={dailyAffirmation}
-                    tasks={todaysTasks}
-                    onAddTask={addTask}
-                    onToggleTask={toggleTask}
-                    onDeleteTask={deleteTask}
-                    weeklyTasks={weeklyTasks}
-                    onAddWeeklyTask={addWeeklyTask}
-                    onToggleWeeklyTask={toggleWeeklyTask}
-                    onDeleteWeeklyTask={deleteWeeklyTask}
-                    onCarryOverWeeklyTasks={carryOverWeeklyTasks}
-                    canCarryOverWeeklyTasks={canCarryOverWeeklyTasks}
-                    meals={todaysMeals}
-                    onSetMeal={setSingleMeal}
-                    onClearMeal={clearSingleMeal}
-                    onAddSnack={addSnack}
-                    onDeleteSnack={deleteSnack}
-                    onAddDrink={addDrink}
-                    onDeleteDrink={deleteDrink}
-                    onOpenHistory={() => setShowHistory(true)}
-                />
+            {step === 'tasks' && !showHistory && !isWeeklyResetOpen && (
+                <>
+                    <TasksPage
+                        weeklyTheme={weeklyTheme}
+                        dailyAffirmation={dailyAffirmation}
+                        tasks={todaysTasks}
+                        onAddTask={addTask}
+                        onToggleTask={toggleTask}
+                        onDeleteTask={deleteTask}
+                        weeklyTasks={weeklyTasks}
+                        onAddWeeklyTask={addWeeklyTask}
+                        onToggleWeeklyTask={toggleWeeklyTask}
+                        onDeleteWeeklyTask={deleteWeeklyTask}
+                        meals={todaysMeals}
+                        onSetMeal={setSingleMeal}
+                        onClearMeal={clearSingleMeal}
+                        onAddSnack={addSnack}
+                        onDeleteSnack={deleteSnack}
+                        onAddDrink={addDrink}
+                        onDeleteDrink={deleteDrink}
+                        onOpenHistory={() => setShowHistory(true)}
+                        onOpenWeeklyReset={() => setIsWeeklyResetOpen(true)}
+                    />
+                </>
             )}
 
             {step === 'tasks' && showHistory && (
@@ -540,6 +498,14 @@ export default function MorningFlow() {
                     tasksByDay={tasksByDay}
                     mealsByDay={mealsByDay}
                     onClose={() => setShowHistory(false)}
+                />
+            )}
+
+            {step === 'tasks' && isWeeklyResetOpen && (
+                <WeeklyResetFlow
+                    weeks={weeks}
+                    setWeeks={setWeeks}
+                    onClose={() => setIsWeeklyResetOpen(false)}
                 />
             )}
 

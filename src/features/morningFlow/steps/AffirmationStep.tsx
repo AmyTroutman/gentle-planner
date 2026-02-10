@@ -34,27 +34,12 @@ export default function AffirmationStep({
             {affirmationDone && (
                 <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem' }}>
                     <button
-                        onClick={onConfirm}
-                        style={{
-                            padding: '0.7rem 1rem',
-                            borderRadius: 12,
-                            border: '1px solid #d1d5db',
-                            background: 'white',
-                        }}
-                    >
+                        onClick={onConfirm}>
                         That’s right!
                     </button>
 
                     <button
-                        onClick={onRefresh}
-                        style={{
-                            padding: '0.7rem 1rem',
-                            borderRadius: 12,
-                            border: '1px solid #d1d5db',
-                            background: 'transparent',
-                            color: 'var(--muted)',
-                        }}
-                    >
+                        onClick={onRefresh}>
                         Give me another
                     </button>
                 </div>

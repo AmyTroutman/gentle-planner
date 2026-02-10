@@ -1,4 +1,5 @@
 import type { Task } from '../tasks/tasks.types'
+import type { WeeklyResetData } from '../weeklyReset/weeklyReset.types'
 
 export type MorningStep =
     | 'greeting'
@@ -22,4 +23,8 @@ export type WeekData = {
     reflections: Reflection[]
     affirmationsByDay: Record<string, string> // dayId -> affirmation
     weeklyTasks: Task[]
+    weeklyReset?: WeeklyResetData
 }
+
+export type WeeksMap = Record<string, WeekData>
+

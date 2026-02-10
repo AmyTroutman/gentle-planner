@@ -2,7 +2,6 @@ import { useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import TypingText from '../../../components/TypingText'
 
-
 type DrinkChoice = 'caf' | 'decaf' | 'tea' | 'none'
 
 type Props = {
@@ -139,12 +138,6 @@ export default function BreakfastStep({ options, onSubmit }: Props) {
                         onClick={submit}
                         disabled={!canSubmit}
                         style={{
-                            width: 'fit-content',
-                            padding: '0.7rem 1rem',
-                            borderRadius: 12,
-                            border: '1px solid #d1d5db',
-                            background: 'white',
-                            fontSize: '1rem',
                             opacity: canSubmit ? 1 : 0.6,
                         }}
                     >

@@ -55,39 +55,18 @@ export default function ReflectionStep({
                 value={text}
                 onChange={(e) => setText(e.target.value)}
                 placeholder="Anything that comes to mind is enough."
-                rows={4}
-                style={{
-                    width: '100%',
-                    padding: '0.75rem',
-                    borderRadius: 12,
-                    border: '1px solid #d1d5db',
-                    resize: 'vertical',
-                    fontSize: '1rem',
-                }}
-            />
+                rows={4}/>
 
             <div style={{ display: 'flex', gap: '0.75rem' }}>
                 <button
                     onClick={submit}
-                    disabled={!text.trim()}
-                    style={{
-                        padding: '0.6rem 0.9rem',
-                        borderRadius: 10,
-                        border: '1px solid #d1d5db',
-                        background: 'white',
-                        opacity: text.trim() ? 1 : 0.6,
-                    }}
-                >
+                    disabled={!text.trim()}>
                     Reflect
                 </button>
 
                 <button
                     onClick={onSkip}
                     style={{
-                        padding: '0.6rem 0.9rem',
-                        borderRadius: 10,
-                        border: '1px solid transparent',
-                        background: 'transparent',
                         color: 'var(--muted)',
                     }}
                 >

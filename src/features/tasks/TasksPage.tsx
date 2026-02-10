@@ -19,8 +19,6 @@ type Props = {
     onAddWeeklyTask: (title: string) => void
     onToggleWeeklyTask: (id: string) => void
     onDeleteWeeklyTask: (id: string) => void
-    onCarryOverWeeklyTasks: () => void
-    canCarryOverWeeklyTasks: boolean
 
     // Meals
     meals: DailyMeals
@@ -34,6 +32,8 @@ type Props = {
     // History
     onOpenHistory: () => void
 
+    // Weekly Reset
+    onOpenWeeklyReset: () => void
 }
 
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
@@ -65,8 +65,6 @@ export default function TasksPage({
     onAddWeeklyTask,
     onToggleWeeklyTask,
     onDeleteWeeklyTask,
-    onCarryOverWeeklyTasks,
-    canCarryOverWeeklyTasks,
 
     meals,
     onSetMeal,
@@ -76,7 +74,8 @@ export default function TasksPage({
     onDeleteDrink,
     onAddDrink,
 
-    onOpenHistory
+    onOpenHistory,
+    onOpenWeeklyReset,
 }: Props) {
     return (
         <section style={{ display: 'grid', gap: '1.25rem' }}>
@@ -100,6 +99,13 @@ export default function TasksPage({
                 >
                     History
                 </button>
+                <button onClick={onOpenWeeklyReset}
+                    style={{
+                        padding: '0.6rem 0.8rem',
+                        borderRadius: 12,
+                        border: '1px solid #d1d5db',
+                        background: 'white',
+                    }}>Weekly reset</button>
 
             </header>
 
@@ -111,23 +117,6 @@ export default function TasksPage({
                     </Card>
 
                     <Card title="This Week">
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.75rem' }}>
-                            <button
-                                onClick={onCarryOverWeeklyTasks}
-                                disabled={!canCarryOverWeeklyTasks}
-                                style={{
-                                    padding: '0.45rem 0.65rem',
-                                    borderRadius: 10,
-                                    border: '1px solid #d1d5db',
-                                    background: 'white',
-                                    opacity: canCarryOverWeeklyTasks ? 1 : 0.5,
-                                    fontSize: '0.9rem',
-                                }}
-                                title="Bring unfinished weekly tasks forward from last week"
-                            >
-                                Carry over
-                            </button>
-                        </div>
 
                         <WeeklyTasks
                             tasks={weeklyTasks}
