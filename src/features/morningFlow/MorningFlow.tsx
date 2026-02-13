@@ -37,6 +37,7 @@ export default function MorningFlow() {
                     weeklyReset: {
                         completed: false,
                         lookback: {},
+                        taskDecisions: {},
                     },
                 },
             }
