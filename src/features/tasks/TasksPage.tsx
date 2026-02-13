@@ -3,6 +3,7 @@ import WeeklyTasks from './WeeklyTasks'
 import type { Task } from './tasks.types'
 import MealsAside from '../meals/MealsAside'
 import type { DailyMeals } from '../meals/meals.types'
+import styles from "./TasksPage.module.css";
 
 type Props = {
     weeklyTheme: string
@@ -109,7 +110,7 @@ export default function TasksPage({
 
             </header>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '1.25rem' }}>
+            <div className={styles.tasksLayout}>
                 {/* Main column */}
                 <div style={{ display: 'grid', gap: '1.25rem' }}>
                     <Card title="Today">

@@ -1,0 +1,14 @@
+.tasksLayout {
+    display: grid;
+    gap: 1.25rem;
+    grid-template-columns: 1fr 1fr;
+    /* desktop: side-by-side */
+    align-items: start;
+}
+
+@media (max-width: 768px) {
+    .tasksLayout {
+        grid-template-columns: 1fr;
+        /* mobile: stacked */
+    }
+}

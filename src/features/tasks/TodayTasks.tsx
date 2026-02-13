@@ -71,9 +71,10 @@ export default function TodayTasks({ tasks, onAdd, onToggle, onDelete }: Props) 
                         <li
                             key={t.id}
                             style={{
-                                display: 'flex',
+                                display: 'grid',
+                                gridTemplateColumns: '18px 1fr auto',
                                 alignItems: 'center',
-                                gap: '0.6rem',
+                                columnGap: '0.45rem',
                                 padding: '0.65rem 0.75rem',
                                 borderRadius: 12,
                                 border: '1px solid #d1d5db',
@@ -84,8 +85,11 @@ export default function TodayTasks({ tasks, onAdd, onToggle, onDelete }: Props) 
                                 type="checkbox"
                                 checked={t.done}
                                 onChange={() => onToggle(t.id)}
+                                style={{ margin: 0, width: 18, height: 18 }}
                             />
-                            <span style={{ flex: 1 }}>{t.title}</span>
+                            <span style={{ minWidth: 0, lineHeight: 1.25 }}>
+                                {t.title}
+                            </span>
                             <button
                                 onClick={() => onDelete(t.id)}
                                 style={{
@@ -114,9 +118,10 @@ export default function TodayTasks({ tasks, onAdd, onToggle, onDelete }: Props) 
                             <li
                                 key={t.id}
                                 style={{
-                                    display: 'flex',
+                                    display: 'grid',
+                                    gridTemplateColumns: '18px 1fr auto',
                                     alignItems: 'center',
-                                    gap: '0.6rem',
+                                    columnGap: '0.45rem',
                                     padding: '0.65rem 0.75rem',
                                     borderRadius: 12,
                                     border: '1px solid #d1d5db',
@@ -128,8 +133,9 @@ export default function TodayTasks({ tasks, onAdd, onToggle, onDelete }: Props) 
                                     type="checkbox"
                                     checked={t.done}
                                     onChange={() => onToggle(t.id)}
+                                    style={{ margin: 0, width: 18, height: 18 }}
                                 />
-                                <span style={{ flex: 1, textDecoration: 'line-through' }}>
+                                <span style={{ minWidth: 0, lineHeight: 1.25 }}>
                                     {t.title}
                                 </span>
                                 <button

@@ -69,17 +69,25 @@ export default function WeeklyTasks({ tasks, onAdd, onToggle, onDelete }: Props)
                         <li
                             key={t.id}
                             style={{
-                                display: 'flex',
+                                display: 'grid',
+                                gridTemplateColumns: '18px 1fr auto',
                                 alignItems: 'center',
-                                gap: '0.5rem',
-                                padding: '0.55rem 0.6rem',
+                                columnGap: '0.45rem',
+                                padding: '0.65rem 0.75rem',
                                 borderRadius: 12,
                                 border: '1px solid #d1d5db',
                                 background: 'white',
                             }}
                         >
-                            <input type="checkbox" checked={t.done} onChange={() => onToggle(t.id)} />
-                            <span style={{ flex: 1, fontSize: '0.95rem' }}>{t.title}</span>
+                            <input
+                                type="checkbox"
+                                checked={t.done}
+                                onChange={() => onToggle(t.id)}
+                                style={{ margin: 0, width: 18, height: 18 }}
+                            />
+                            <span style={{ minWidth: 0, lineHeight: 1.25 }}>
+                                {t.title}
+                            </span>
                             <button
                                 onClick={() => onDelete(t.id)}
                                 style={{
@@ -107,18 +115,24 @@ export default function WeeklyTasks({ tasks, onAdd, onToggle, onDelete }: Props)
                             <li
                                 key={t.id}
                                 style={{
-                                    display: 'flex',
+                                    display: 'grid',
+                                    gridTemplateColumns: '18px 1fr auto',
                                     alignItems: 'center',
-                                    gap: '0.5rem',
-                                    padding: '0.55rem 0.6rem',
+                                    columnGap: '0.45rem',
+                                    padding: '0.65rem 0.75rem',
                                     borderRadius: 12,
                                     border: '1px solid #d1d5db',
                                     background: 'white',
                                     opacity: 0.8,
                                 }}
                             >
-                                <input type="checkbox" checked={t.done} onChange={() => onToggle(t.id)} />
-                                <span style={{ flex: 1, textDecoration: 'line-through', fontSize: '0.95rem' }}>
+                                <input
+                                    type="checkbox"
+                                    checked={t.done}
+                                    onChange={() => onToggle(t.id)}
+                                    style={{ margin: 0, width: 18, height: 18 }}
+                                />
+                                <span style={{ minWidth: 0, lineHeight: 1.25, textDecoration: 'line-through' }}>
                                     {t.title}
                                 </span>
                                 <button
