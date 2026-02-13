@@ -67,7 +67,7 @@ export default function MorningFlow() {
 
     const todaysTasks = tasksByDay[dayId] ?? []
 
-    // For now: fallback theme if not set yet
+    // For now fallback theme if not set yet
     const weeklyTheme = weeks[weekId]?.theme 
     const weeklyTasks = weeks[weekId]?.weeklyTasks ?? []
     const reflections = weeks[weekId]?.reflections ?? []
