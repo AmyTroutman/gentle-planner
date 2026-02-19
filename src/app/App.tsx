@@ -1,5 +1,5 @@
-import MigrateToFirestore from '../features/migrate/MigrateToFirestore'
+import MorningFlow from '../features/morningFlow/MorningFlow'
 
 export default function App() {
-    return <MigrateToFirestore />
+    return <MorningFlow />
 }
