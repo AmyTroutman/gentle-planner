@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import type { MorningStep, Reflection, WeekData, WeeksMap } from './morningFlow.types'
-import { useLocalStorage } from '../../hooks/useLocalStorage'
+import { useFirestoreDoc } from '../../hooks/useFirestoreDoc'
 import GreetingStep from './steps/GreetingStep'
 import ThemeStep from './steps/ThemeStep'
 import { getDayId, getWeekId } from '../../lib/dates'
@@ -20,10 +20,44 @@ export default function MorningFlow() {
     const weekId = getWeekId()
     const dayId = getDayId()
 
-    const [weeks, setWeeks] = useLocalStorage<WeeksMap>('gentlePlanner.weeks', {})
+    const [weeks, setWeeks, weeksLoading] = useFirestoreDoc<WeeksMap>('weeks', {})
+    const [mealsByDay, setMealsByDay, mealsLoading] = useFirestoreDoc<Record<string, DailyMeals>>('mealsByDay', {})
+    const [tasksByDay, setTasksByDay, tasksLoading] = useFirestoreDoc<Record<string, Task[]>>('tasksByDay', {})
+
+    const isLoading = weeksLoading || mealsLoading || tasksLoading
+
     const weekHasTheme = Boolean(weeks[weekId]?.theme?.trim())
+    const hasCompletedMorningFlow = Boolean(mealsByDay[dayId]?.breakfast)
+
+    const [step, setStep] = useState<MorningStep>('greeting')
+    const [stepInitialized, setStepInitialized] = useState(false)
+
+    // Set the initial step once Firestore data has loaded
+    useEffect(() => {
+        if (isLoading || stepInitialized) return
+        if (!weekHasTheme) {
+            setStep('weeklyThemeSetup')
+        } else if (hasCompletedMorningFlow) {
+            setStep('tasks')
+        } else {
+            setStep('greeting')
+        }
+        setStepInitialized(true)
+    }, [isLoading, stepInitialized, weekHasTheme, hasCompletedMorningFlow])
+
+    const [showHistory, setShowHistory] = useState(false)
+
+    const todaysMeals: DailyMeals = mealsByDay[dayId] ?? { snacks: [], drinks: [] }
+    const todaysTasks = tasksByDay[dayId] ?? []
+
+    const weeklyTheme = weeks[weekId]?.theme
+    const weeklyTasks = weeks[weekId]?.weeklyTasks ?? []
+    const reflections = weeks[weekId]?.reflections ?? []
+
+    const [isWeeklyResetOpen, setIsWeeklyResetOpen] = useState(false)
 
     useEffect(() => {
+        if (isLoading) return
         setWeeks((prev) => {
             if (prev[weekId]) return prev
             return {
@@ -42,45 +76,17 @@ export default function MorningFlow() {
                 },
             }
         })
-    }, [weekId, setWeeks])
-
-    const [mealsByDay, setMealsByDay] = useLocalStorage<Record<string, DailyMeals>>(
-        'gentlePlanner.mealsByDay',
-        {}
-    )
-    const hasCompletedMorningFlow = Boolean(mealsByDay[dayId]?.breakfast)
-
-    const [step, setStep] = useState<MorningStep>(() => {
-        if (!weekHasTheme) return 'weeklyThemeSetup'
-        if (hasCompletedMorningFlow) return 'tasks'
-        return 'greeting'
-    })
-
-    const [showHistory, setShowHistory] = useState(false)
-
-    const todaysMeals: DailyMeals = mealsByDay[dayId] ?? { snacks: [], drinks: [] }
-    
-    const [tasksByDay, setTasksByDay] = useLocalStorage<Record<string, Task[]>>(
-        'gentlePlanner.tasksByDay',
-        {}
-    )
-
-    const todaysTasks = tasksByDay[dayId] ?? []
-
-    // For now fallback theme if not set yet
-    const weeklyTheme = weeks[weekId]?.theme 
-    const weeklyTasks = weeks[weekId]?.weeklyTasks ?? []
-    const reflections = weeks[weekId]?.reflections ?? []
-
-    const [isWeeklyResetOpen, setIsWeeklyResetOpen] = useState(false)
+    }, [weekId, setWeeks, isLoading])
 
     useEffect(() => {
-        if (!weekHasTheme && step !== 'weeklyThemeSetup') {
+        if (isLoading) return
+        if (!weekHasTheme && stepInitialized && step !== 'weeklyThemeSetup') {
             setStep('weeklyThemeSetup')
         }
-    }, [weekHasTheme, step])
+    }, [weekHasTheme, step, stepInitialized, isLoading])
 
     useEffect(() => {
+        if (isLoading) return
         const week = weeks[weekId]
         if (!week) return
 
@@ -90,8 +96,6 @@ export default function MorningFlow() {
             setWeeks((prev) => {
                 const existing = prev[weekId]
                 if (!existing) return prev
-
-                // double-check to avoid overwriting if it changed
                 if (existing.affirmationsByDay[dayId]) return prev
 
                 return {
@@ -106,7 +110,7 @@ export default function MorningFlow() {
                 }
             })
         }
-    }, [weekId, dayId, weeks, setWeeks])
+    }, [weekId, dayId, weeks, setWeeks, isLoading])
 
     function pickAffirmation(): string {
         const index = Math.floor(Math.random() * BASE_AFFIRMATIONS.length)
@@ -121,7 +125,6 @@ export default function MorningFlow() {
     function getTodayAffirmation(): string {
         const existing = weeks[weekId]?.affirmationsByDay?.[dayId]
         if (existing) return existing
-
         return pickAffirmation()
     }
 
@@ -418,6 +421,15 @@ export default function MorningFlow() {
         })
     }
 
+    // ─── Loading state ────────────────────────────────────────────────────────
+    if (isLoading) {
+        return (
+            <main style={{ padding: '3rem', maxWidth: 700 }}>
+                <p style={{ color: 'var(--muted)' }}>Loading...</p>
+            </main>
+        )
+    }
+
     return (
         <main style={{ padding: '3rem', maxWidth: 700 }}>
             {step === 'greeting' && <GreetingStep onDone={next} />}
@@ -426,7 +438,6 @@ export default function MorningFlow() {
                 <WeeklyThemeSetupStep
                     onSave={(theme) => {
                         setWeekTheme(theme)
-                        // after setting theme, go to greeting or theme/reflection step
                         setStep(hasCompletedMorningFlow ? 'tasks' : 'greeting')
                     }}
                     onSkip={() => setStep(hasCompletedMorningFlow ? 'tasks' : 'greeting')}
@@ -521,7 +532,7 @@ export default function MorningFlow() {
                         <button onClick={next}>Next</button>
                     </>
                 )}
-            
+
         </main>
     )
 }
