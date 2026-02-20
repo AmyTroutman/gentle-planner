@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { doc, setDoc, onSnapshot, updateDoc } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import type { WeeksMap } from '../features/morningFlow/morningFlow.types'
@@ -12,17 +12,21 @@ export type UserDoc = {
     weeks: WeeksMap
     mealsByDay: Record<string, DailyMeals>
     tasksByDay: Record<string, Task[]>
+    notesByDay: Record<string, string>
 }
 
 const DEFAULT_USER_DOC: UserDoc = {
     weeks: {},
     mealsByDay: {},
     tasksByDay: {},
+    notesByDay: {},
 }
 
 export function useUserDoc() {
     const [data, setData] = useState<UserDoc>(DEFAULT_USER_DOC)
     const [loading, setLoading] = useState(true)
+    // dataRef lets our callbacks always see current data without
+    // needing to be in dependency arrays (which would cause re-renders)
     const dataRef = useRef<UserDoc>(DEFAULT_USER_DOC)
 
     useEffect(() => {
@@ -39,12 +43,13 @@ export function useUserDoc() {
         })
 
         return unsub
-    }, [])
+    }, []) // runs once on mount
 
-    function updateField<K extends keyof UserDoc>(
+    // useCallback with empty deps — safe because it only touches dataRef (a ref, not state)
+    const updateField = useCallback(<K extends keyof UserDoc>(
         field: K,
         updater: UserDoc[K] | ((prev: UserDoc[K]) => UserDoc[K])
-    ) {
+    ) => {
         const next =
             typeof updater === 'function'
                 ? (updater as (prev: UserDoc[K]) => UserDoc[K])(dataRef.current[field])
@@ -64,24 +69,41 @@ export function useUserDoc() {
                 console.error(`Failed to update "${field}":`, err)
             }
         })
-    }
+    }, []) // stable — never recreated
+
+    const setWeeks = useCallback(
+        (updater: WeeksMap | ((prev: WeeksMap) => WeeksMap)) =>
+            updateField('weeks', updater),
+        [updateField]
+    )
+
+    const setMealsByDay = useCallback(
+        (updater: Record<string, DailyMeals> | ((prev: Record<string, DailyMeals>) => Record<string, DailyMeals>)) =>
+            updateField('mealsByDay', updater),
+        [updateField]
+    )
+
+    const setTasksByDay = useCallback(
+        (updater: Record<string, Task[]> | ((prev: Record<string, Task[]>) => Record<string, Task[]>)) =>
+            updateField('tasksByDay', updater),
+        [updateField]
+    )
+
+    const setNotesByDay = useCallback(
+        (updater: Record<string, string> | ((prev: Record<string, string>) => Record<string, string>)) =>
+            updateField('notesByDay', updater),
+        [updateField]
+    )
 
     return {
         loading,
         weeks: data.weeks,
-        setWeeks: (updater: WeeksMap | ((prev: WeeksMap) => WeeksMap)) =>
-            updateField('weeks', updater),
+        setWeeks,
         mealsByDay: data.mealsByDay,
-        setMealsByDay: (
-            updater:
-                | Record<string, DailyMeals>
-                | ((prev: Record<string, DailyMeals>) => Record<string, DailyMeals>)
-        ) => updateField('mealsByDay', updater),
+        setMealsByDay,
         tasksByDay: data.tasksByDay,
-        setTasksByDay: (
-            updater:
-                | Record<string, Task[]>
-                | ((prev: Record<string, Task[]>) => Record<string, Task[]>)
-        ) => updateField('tasksByDay', updater),
+        setTasksByDay,
+        notesByDay: data.notesByDay,
+        setNotesByDay,
     }
 }

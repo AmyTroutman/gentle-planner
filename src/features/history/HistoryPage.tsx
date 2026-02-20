@@ -8,6 +8,7 @@ type Props = {
     weeks: Record<string, WeekData>
     tasksByDay: Record<string, Task[]>
     mealsByDay: Record<string, DailyMeals>
+    notesByDay: Record<string, string>
     onClose: () => void
 }
 
@@ -27,8 +28,7 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
     )
 }
 
-export default function HistoryPage({ weeks, tasksByDay, mealsByDay, onClose }: Props) {
-    // date input expects YYYY-MM-DD
+export default function HistoryPage({ weeks, tasksByDay, mealsByDay, notesByDay, onClose }: Props) {
     const [selectedDayId, setSelectedDayId] = useState(() => getDayId(new Date()))
 
     const selectedDate = useMemo(() => new Date(`${selectedDayId}T12:00:00`), [selectedDayId])
@@ -42,6 +42,7 @@ export default function HistoryPage({ weeks, tasksByDay, mealsByDay, onClose }: 
 
     const dayTasks = tasksByDay[selectedDayId] ?? []
     const meals = mealsByDay[selectedDayId] ?? { snacks: [], drinks: [] }
+    const note = notesByDay[selectedDayId] ?? ''
 
     const openDayTasks = dayTasks.filter((t) => !t.done)
     const doneDayTasks = dayTasks.filter((t) => t.done)
@@ -92,7 +93,7 @@ export default function HistoryPage({ weeks, tasksByDay, mealsByDay, onClose }: 
 
                     {dailyAffirmation ? (
                         <div style={{ fontSize: '1.05rem', lineHeight: 1.4 }}>
-                            <span style={{ color: 'var(--muted)' }}>Affirmation: </span>“{dailyAffirmation}”
+                            <span style={{ color: 'var(--muted)' }}>Affirmation: </span>"{dailyAffirmation}"
                         </div>
                     ) : (
                         <div style={{ color: 'var(--muted)' }}>No affirmation saved for this day.</div>
@@ -171,7 +172,7 @@ export default function HistoryPage({ weeks, tasksByDay, mealsByDay, onClose }: 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
                 <Card title="Week tasks">
                     {weeklyTasks.length === 0 ? (
-                        <p style={{ margin: 0, color: 'var(--muted)' }}>No weekly tasks saved for this week.</p>
+                        <p style={{ margin: 0, color: 'var(--muted)' }}>No weekly tasks for this week.</p>
                     ) : (
                         <div style={{ display: 'grid', gap: '0.75rem' }}>
                             {openWeekly.length > 0 && (
@@ -200,21 +201,26 @@ export default function HistoryPage({ weeks, tasksByDay, mealsByDay, onClose }: 
                     )}
                 </Card>
 
-                <Card title="Reflections (this week)">
-                    {reflections.length === 0 ? (
-                        <p style={{ margin: 0, color: 'var(--muted)' }}>No reflections saved for this week.</p>
+                <Card title="Notes">
+                    {note ? (
+                        <p style={{ margin: 0, whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{note}</p>
                     ) : (
-                        <ul style={{ margin: 0, paddingLeft: '1.25rem' }}>
-                            {reflections.map((r) => (
-                                <li key={r.id} style={{ marginBottom: '0.5rem' }}>
-                                    <div style={{ color: 'var(--muted)', fontSize: '0.9rem' }}>{r.dayId}</div>
-                                    <div>{r.text}</div>
-                                </li>
-                            ))}
-                        </ul>
+                        <p style={{ margin: 0, color: 'var(--muted)' }}>No notes for this day.</p>
                     )}
                 </Card>
             </div>
+
+            {reflections.filter((r) => r.dayId === selectedDayId).length > 0 && (
+                <Card title="Reflections">
+                    <div style={{ display: 'grid', gap: '0.5rem' }}>
+                        {reflections
+                            .filter((r) => r.dayId === selectedDayId)
+                            .map((r) => (
+                                <p key={r.id} style={{ margin: 0, lineHeight: 1.6 }}>{r.text}</p>
+                            ))}
+                    </div>
+                </Card>
+            )}
         </section>
     )
 }

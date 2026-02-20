@@ -25,6 +25,7 @@ export default function MorningFlow() {
         weeks, setWeeks,
         mealsByDay, setMealsByDay,
         tasksByDay, setTasksByDay,
+        notesByDay, setNotesByDay,
     } = useUserDoc()
 
     const weekHasTheme = Boolean(weeks[weekId]?.theme?.trim())
@@ -50,6 +51,7 @@ export default function MorningFlow() {
 
     const todaysMeals: DailyMeals = mealsByDay[dayId] ?? { snacks: [], drinks: [] }
     const todaysTasks = tasksByDay[dayId] ?? []
+    const todaysNote = notesByDay[dayId] ?? ''
 
     const weeklyTheme = weeks[weekId]?.theme
     const weeklyTasks = weeks[weekId]?.weeklyTasks ?? []
@@ -356,6 +358,10 @@ export default function MorningFlow() {
         })
     }
 
+    function updateNote(value: string) {
+        setNotesByDay((prev) => ({ ...prev, [dayId]: value }))
+    }
+
     // ─── Loading state ────────────────────────────────────────────────────────
     if (loading) {
         return (
@@ -432,6 +438,8 @@ export default function MorningFlow() {
                     onDeleteSnack={deleteSnack}
                     onAddDrink={addDrink}
                     onDeleteDrink={deleteDrink}
+                    note={todaysNote}
+                    onNoteChange={updateNote}
                     onOpenHistory={() => setShowHistory(true)}
                     onOpenWeeklyReset={() => setIsWeeklyResetOpen(true)}
                 />
@@ -442,6 +450,7 @@ export default function MorningFlow() {
                     weeks={weeks}
                     tasksByDay={tasksByDay}
                     mealsByDay={mealsByDay}
+                    notesByDay={notesByDay}
                     onClose={() => setShowHistory(false)}
                 />
             )}
@@ -453,7 +462,6 @@ export default function MorningFlow() {
                     onClose={() => setIsWeeklyResetOpen(false)}
                 />
             )}
-
         </main>
     )
 }

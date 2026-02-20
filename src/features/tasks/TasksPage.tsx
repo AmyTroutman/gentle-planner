@@ -3,6 +3,7 @@ import WeeklyTasks from './WeeklyTasks'
 import type { Task } from './tasks.types'
 import MealsAside from '../meals/MealsAside'
 import type { DailyMeals } from '../meals/meals.types'
+import NotesSection from '../notes/NotesSection'
 import styles from "./TasksPage.module.css";
 
 type Props = {
@@ -29,6 +30,10 @@ type Props = {
     onDeleteSnack: (id: string) => void
     onAddDrink: (text: string) => void
     onDeleteDrink: (id: string) => void
+
+    // Notes
+    note: string
+    onNoteChange: (value: string) => void
 
     // History
     onOpenHistory: () => void
@@ -75,6 +80,9 @@ export default function TasksPage({
     onDeleteDrink,
     onAddDrink,
 
+    note,
+    onNoteChange,
+
     onOpenHistory,
     onOpenWeeklyReset,
 }: Props) {
@@ -87,7 +95,7 @@ export default function TasksPage({
 
                 <div style={{ fontSize: '1.15rem', lineHeight: 1.4 }}>
                     <span style={{ color: 'var(--muted)' }}>Today: </span>
-                    “{dailyAffirmation}”
+                    "{dailyAffirmation}"
                 </div>
                 <button
                     onClick={onOpenHistory}
@@ -100,14 +108,17 @@ export default function TasksPage({
                 >
                     History
                 </button>
-                <button onClick={onOpenWeeklyReset}
+                <button
+                    onClick={onOpenWeeklyReset}
                     style={{
                         padding: '0.6rem 0.8rem',
                         borderRadius: 12,
                         border: '1px solid #d1d5db',
                         background: 'white',
-                    }}>Weekly reset</button>
-
+                    }}
+                >
+                    Weekly reset
+                </button>
             </header>
 
             <div className={styles.tasksLayout}>
@@ -118,7 +129,6 @@ export default function TasksPage({
                     </Card>
 
                     <Card title="This Week">
-
                         <WeeklyTasks
                             tasks={weeklyTasks}
                             onAdd={onAddWeeklyTask}
@@ -148,6 +158,9 @@ export default function TasksPage({
                         onDeleteDrink={onDeleteDrink}
                     />
                 </aside>
+                <Card title="Notes">
+                    <NotesSection note={note} onChange={onNoteChange} />
+                </Card>
             </div>
         </section>
     )
