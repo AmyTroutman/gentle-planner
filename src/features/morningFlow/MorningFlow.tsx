@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import type { MorningStep, Reflection, WeekData, WeeksMap } from './morningFlow.types'
-import { useFirestoreDoc } from '../../hooks/useFirestoreDoc'
+import { useUserDoc } from '../../hooks/useUserDoc'
 import GreetingStep from './steps/GreetingStep'
 import ThemeStep from './steps/ThemeStep'
 import { getDayId, getWeekId } from '../../lib/dates'
@@ -20,11 +20,12 @@ export default function MorningFlow() {
     const weekId = getWeekId()
     const dayId = getDayId()
 
-    const [weeks, setWeeks, weeksLoading] = useFirestoreDoc<WeeksMap>('weeks', {})
-    const [mealsByDay, setMealsByDay, mealsLoading] = useFirestoreDoc<Record<string, DailyMeals>>('mealsByDay', {})
-    const [tasksByDay, setTasksByDay, tasksLoading] = useFirestoreDoc<Record<string, Task[]>>('tasksByDay', {})
-
-    const isLoading = weeksLoading || mealsLoading || tasksLoading
+    const {
+        loading,
+        weeks, setWeeks,
+        mealsByDay, setMealsByDay,
+        tasksByDay, setTasksByDay,
+    } = useUserDoc()
 
     const weekHasTheme = Boolean(weeks[weekId]?.theme?.trim())
     const hasCompletedMorningFlow = Boolean(mealsByDay[dayId]?.breakfast)
@@ -34,7 +35,7 @@ export default function MorningFlow() {
 
     // Set the initial step once Firestore data has loaded
     useEffect(() => {
-        if (isLoading || stepInitialized) return
+        if (loading || stepInitialized) return
         if (!weekHasTheme) {
             setStep('weeklyThemeSetup')
         } else if (hasCompletedMorningFlow) {
@@ -43,7 +44,7 @@ export default function MorningFlow() {
             setStep('greeting')
         }
         setStepInitialized(true)
-    }, [isLoading, stepInitialized, weekHasTheme, hasCompletedMorningFlow])
+    }, [loading, stepInitialized, weekHasTheme, hasCompletedMorningFlow])
 
     const [showHistory, setShowHistory] = useState(false)
 
@@ -57,7 +58,7 @@ export default function MorningFlow() {
     const [isWeeklyResetOpen, setIsWeeklyResetOpen] = useState(false)
 
     useEffect(() => {
-        if (isLoading) return
+        if (loading) return
         setWeeks((prev) => {
             if (prev[weekId]) return prev
             return {
@@ -76,17 +77,17 @@ export default function MorningFlow() {
                 },
             }
         })
-    }, [weekId, setWeeks, isLoading])
+    }, [weekId, setWeeks, loading])
 
     useEffect(() => {
-        if (isLoading) return
+        if (loading) return
         if (!weekHasTheme && stepInitialized && step !== 'weeklyThemeSetup') {
             setStep('weeklyThemeSetup')
         }
-    }, [weekHasTheme, step, stepInitialized, isLoading])
+    }, [weekHasTheme, step, stepInitialized, loading])
 
     useEffect(() => {
-        if (isLoading) return
+        if (loading) return
         const week = weeks[weekId]
         if (!week) return
 
@@ -110,7 +111,7 @@ export default function MorningFlow() {
                 }
             })
         }
-    }, [weekId, dayId, weeks, setWeeks, isLoading])
+    }, [weekId, dayId, weeks, setWeeks, loading])
 
     function pickAffirmation(): string {
         const index = Math.floor(Math.random() * BASE_AFFIRMATIONS.length)
@@ -118,8 +119,7 @@ export default function MorningFlow() {
     }
 
     function refreshAffirmation() {
-        const nextOne = pickAffirmation()
-        setTodayAffirmation(nextOne)
+        setTodayAffirmation(pickAffirmation())
     }
 
     function getTodayAffirmation(): string {
@@ -135,15 +135,11 @@ export default function MorningFlow() {
         setWeeks((prev) => {
             const existing = prev[weekId]
             if (!existing) return prev
-
             return {
                 ...prev,
                 [weekId]: {
                     ...existing,
-                    affirmationsByDay: {
-                        ...existing.affirmationsByDay,
-                        [dayId]: cleaned,
-                    },
+                    affirmationsByDay: { ...existing.affirmationsByDay, [dayId]: cleaned },
                 },
             }
         })
@@ -158,14 +154,7 @@ export default function MorningFlow() {
         setWeeks((prev) => {
             const existing = prev[weekId]
             if (!existing) return prev
-
-            return {
-                ...prev,
-                [weekId]: {
-                    ...existing,
-                    theme: cleaned,
-                },
-            }
+            return { ...prev, [weekId]: { ...existing, theme: cleaned } }
         })
     }
 
@@ -183,13 +172,9 @@ export default function MorningFlow() {
         setWeeks((prev) => {
             const existing = prev[weekId]
             if (!existing) return prev
-
             return {
                 ...prev,
-                [weekId]: {
-                    ...existing,
-                    reflections: [newItem, ...existing.reflections],
-                },
+                [weekId]: { ...existing, reflections: [newItem, ...existing.reflections] },
             }
         })
     }
@@ -198,12 +183,10 @@ export default function MorningFlow() {
         setWeeks((prev) => {
             const existing = prev[weekId]
             if (!existing) return prev
-
             const nextWeek: WeekData = {
                 ...existing,
                 reflections: existing.reflections.filter((r) => r.id !== id),
             }
-
             return { ...prev, [weekId]: nextWeek }
         })
     }
@@ -215,9 +198,8 @@ export default function MorningFlow() {
             'affirmation',
             'breakfast',
             'transition',
-            'tasks'
+            'tasks',
         ]
-
         const currentIndex = order.indexOf(step)
         const nextStep = order[currentIndex + 1]
         if (nextStep) setStep(nextStep)
@@ -228,12 +210,7 @@ export default function MorningFlow() {
 
         if (payload.drink !== 'none') {
             const label =
-                payload.drink === 'caf'
-                    ? 'Caf'
-                    : payload.drink === 'decaf'
-                        ? 'Decaf'
-                        : 'Tea'
-
+                payload.drink === 'caf' ? 'Caf' : payload.drink === 'decaf' ? 'Decaf' : 'Tea'
             addDrink(label)
         }
 
@@ -246,13 +223,7 @@ export default function MorningFlow() {
 
         setMealsByDay((prev) => {
             const current = prev[dayId] ?? { snacks: [], drinks: [] }
-            return {
-                ...prev,
-                [dayId]: {
-                    ...current,
-                    [type]: cleaned,
-                },
-            }
+            return { ...prev, [dayId]: { ...current, [type]: cleaned } }
         })
     }
 
@@ -269,11 +240,7 @@ export default function MorningFlow() {
         const cleaned = text.trim()
         if (!cleaned) return
 
-        const snack = {
-            id: crypto.randomUUID(),
-            text: cleaned,
-            createdAt: new Date().toISOString(),
-        }
+        const snack = { id: crypto.randomUUID(), text: cleaned, createdAt: new Date().toISOString() }
 
         setMealsByDay((prev) => ({
             ...prev,
@@ -287,10 +254,7 @@ export default function MorningFlow() {
     function deleteSnack(id: string) {
         setMealsByDay((prev) => {
             const current = prev[dayId] ?? { snacks: [] }
-            return {
-                ...prev,
-                [dayId]: { ...current, snacks: current.snacks.filter((s) => s.id !== id) },
-            }
+            return { ...prev, [dayId]: { ...current, snacks: current.snacks.filter((s) => s.id !== id) } }
         })
     }
 
@@ -298,20 +262,13 @@ export default function MorningFlow() {
         const cleaned = text.trim()
         if (!cleaned) return
 
-        const drink = {
-            id: crypto.randomUUID(),
-            text: cleaned,
-            createdAt: new Date().toISOString(),
-        }
+        const drink = { id: crypto.randomUUID(), text: cleaned, createdAt: new Date().toISOString() }
 
         setMealsByDay((prev) => {
             const current = prev[dayId] ?? { snacks: [], drinks: [] }
             return {
                 ...prev,
-                [dayId]: {
-                    ...current,
-                    drinks: [drink, ...(current.drinks ?? [])],
-                },
+                [dayId]: { ...current, drinks: [drink, ...(current.drinks ?? [])] },
             }
         })
     }
@@ -321,26 +278,14 @@ export default function MorningFlow() {
             const current = prev[dayId] ?? { snacks: [], drinks: [] }
             return {
                 ...prev,
-                [dayId]: {
-                    ...current,
-                    drinks: (current.drinks ?? []).filter((d) => d.id !== id),
-                },
+                [dayId]: { ...current, drinks: (current.drinks ?? []).filter((d) => d.id !== id) },
             }
         })
     }
 
     function addTask(title: string) {
-        const t: Task = {
-            id: crypto.randomUUID(),
-            title,
-            done: false,
-            createdAt: new Date().toISOString(),
-        }
-
-        setTasksByDay((prev) => ({
-            ...prev,
-            [dayId]: [t, ...(prev[dayId] ?? [])],
-        }))
+        const t: Task = { id: crypto.randomUUID(), title, done: false, createdAt: new Date().toISOString() }
+        setTasksByDay((prev) => ({ ...prev, [dayId]: [t, ...(prev[dayId] ?? [])] }))
     }
 
     function toggleTask(id: string) {
@@ -348,11 +293,7 @@ export default function MorningFlow() {
             ...prev,
             [dayId]: (prev[dayId] ?? []).map((t) =>
                 t.id === id
-                    ? {
-                        ...t,
-                        done: !t.done,
-                        doneAt: !t.done ? new Date().toISOString() : undefined,
-                    }
+                    ? { ...t, done: !t.done, doneAt: !t.done ? new Date().toISOString() : undefined }
                     : t
             ),
         }))
@@ -366,12 +307,7 @@ export default function MorningFlow() {
     }
 
     function addWeeklyTask(title: string) {
-        const t: Task = {
-            id: crypto.randomUUID(),
-            title,
-            done: false,
-            createdAt: new Date().toISOString(),
-        }
+        const t: Task = { id: crypto.randomUUID(), title, done: false, createdAt: new Date().toISOString() }
 
         setWeeks((prev) => {
             const existing = prev[weekId]
@@ -392,16 +328,16 @@ export default function MorningFlow() {
         setWeeks((prev) => {
             const existing = prev[weekId]
             if (!existing) return prev
-
-            const nextWeeklyTasks = (existing.weeklyTasks ?? []).map((t) =>
-                t.id === id
-                    ? { ...t, done: !t.done, doneAt: !t.done ? new Date().toISOString() : undefined }
-                    : t
-            )
-
             return {
                 ...prev,
-                [weekId]: { ...existing, weeklyTasks: nextWeeklyTasks },
+                [weekId]: {
+                    ...existing,
+                    weeklyTasks: (existing.weeklyTasks ?? []).map((t) =>
+                        t.id === id
+                            ? { ...t, done: !t.done, doneAt: !t.done ? new Date().toISOString() : undefined }
+                            : t
+                    ),
+                },
             }
         })
     }
@@ -410,7 +346,6 @@ export default function MorningFlow() {
         setWeeks((prev) => {
             const existing = prev[weekId]
             if (!existing) return prev
-
             return {
                 ...prev,
                 [weekId]: {
@@ -422,7 +357,7 @@ export default function MorningFlow() {
     }
 
     // ─── Loading state ────────────────────────────────────────────────────────
-    if (isLoading) {
+    if (loading) {
         return (
             <main style={{ padding: '3rem', maxWidth: 700 }}>
                 <p style={{ color: 'var(--muted)' }}>Loading...</p>
@@ -479,29 +414,27 @@ export default function MorningFlow() {
             {step === 'transition' && <TransitionStep onDone={next} />}
 
             {step === 'tasks' && !showHistory && !isWeeklyResetOpen && (
-                <>
-                    <TasksPage
-                        weeklyTheme={weeklyTheme}
-                        dailyAffirmation={dailyAffirmation}
-                        tasks={todaysTasks}
-                        onAddTask={addTask}
-                        onToggleTask={toggleTask}
-                        onDeleteTask={deleteTask}
-                        weeklyTasks={weeklyTasks}
-                        onAddWeeklyTask={addWeeklyTask}
-                        onToggleWeeklyTask={toggleWeeklyTask}
-                        onDeleteWeeklyTask={deleteWeeklyTask}
-                        meals={todaysMeals}
-                        onSetMeal={setSingleMeal}
-                        onClearMeal={clearSingleMeal}
-                        onAddSnack={addSnack}
-                        onDeleteSnack={deleteSnack}
-                        onAddDrink={addDrink}
-                        onDeleteDrink={deleteDrink}
-                        onOpenHistory={() => setShowHistory(true)}
-                        onOpenWeeklyReset={() => setIsWeeklyResetOpen(true)}
-                    />
-                </>
+                <TasksPage
+                    weeklyTheme={weeklyTheme}
+                    dailyAffirmation={dailyAffirmation}
+                    tasks={todaysTasks}
+                    onAddTask={addTask}
+                    onToggleTask={toggleTask}
+                    onDeleteTask={deleteTask}
+                    weeklyTasks={weeklyTasks}
+                    onAddWeeklyTask={addWeeklyTask}
+                    onToggleWeeklyTask={toggleWeeklyTask}
+                    onDeleteWeeklyTask={deleteWeeklyTask}
+                    meals={todaysMeals}
+                    onSetMeal={setSingleMeal}
+                    onClearMeal={clearSingleMeal}
+                    onAddSnack={addSnack}
+                    onDeleteSnack={deleteSnack}
+                    onAddDrink={addDrink}
+                    onDeleteDrink={deleteDrink}
+                    onOpenHistory={() => setShowHistory(true)}
+                    onOpenWeeklyReset={() => setIsWeeklyResetOpen(true)}
+                />
             )}
 
             {step === 'tasks' && showHistory && (
@@ -520,18 +453,6 @@ export default function MorningFlow() {
                     onClose={() => setIsWeeklyResetOpen(false)}
                 />
             )}
-
-            {step !== 'greeting' &&
-                step !== 'theme' &&
-                step !== 'affirmation' &&
-                step !== 'breakfast' &&
-                step !== 'transition' &&
-                step !== 'tasks' && (
-                    <>
-                        <h2>Current step: {step}</h2>
-                        <button onClick={next}>Next</button>
-                    </>
-                )}
 
         </main>
     )
