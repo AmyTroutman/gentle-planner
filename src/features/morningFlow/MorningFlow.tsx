@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import type { MorningStep, Reflection, WeekData, WeeksMap } from './morningFlow.types'
+import type { MorningStep, Reflection, WeekData } from './morningFlow.types'
 import { useUserDoc } from '../../hooks/useUserDoc'
 import GreetingStep from './steps/GreetingStep'
 import ThemeStep from './steps/ThemeStep'
