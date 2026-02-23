@@ -1,7 +1,7 @@
 import { format, startOfWeek, addWeeks } from 'date-fns'
 
 export function getWeekId(date: Date = new Date()): string {
-    const start = startOfWeek(date, { weekStartsOn: 1 })
+    const start = startOfWeek(date, { weekStartsOn: 0 })
     return format(start, 'yyyy-MM-dd')
 }
 
@@ -10,7 +10,7 @@ export function getDayId(date: Date = new Date()): string {
 }
 
 export function getPreviousWeekId(date: Date = new Date()): string {
-    const start = startOfWeek(date, { weekStartsOn: 1 })
+    const start = startOfWeek(date, { weekStartsOn: 0 })
     const prev = addWeeks(start, -1)
     return format(prev, 'yyyy-MM-dd')
 }

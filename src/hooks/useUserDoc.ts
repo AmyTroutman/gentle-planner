@@ -4,6 +4,7 @@ import { db } from '../lib/firebase'
 import type { WeeksMap } from '../features/morningFlow/morningFlow.types'
 import type { DailyMeals } from '../features/meals/meals.types'
 import type { Task } from '../features/tasks/tasks.types'
+import type { ChatMessage } from '../features/journal/journal.types'
 
 const USER_ID = 'me'
 const USER_REF = () => doc(db, 'users', USER_ID)
@@ -13,6 +14,8 @@ export type UserDoc = {
     mealsByDay: Record<string, DailyMeals>
     tasksByDay: Record<string, Task[]>
     notesByDay: Record<string, string>
+    journalByDay: Record<string, string>
+    chatsByDay: Record<string, ChatMessage[]>
 }
 
 const DEFAULT_USER_DOC: UserDoc = {
@@ -20,13 +23,33 @@ const DEFAULT_USER_DOC: UserDoc = {
     mealsByDay: {},
     tasksByDay: {},
     notesByDay: {},
+    journalByDay: {},
+    chatsByDay: {},
+}
+
+/**
+ * Recursively remove undefined values from an object so Firestore doesn't reject them.
+ * Firestore accepts null but not undefined.
+ */
+function stripUndefined<T>(value: T): T {
+    if (Array.isArray(value)) {
+        return value.map(stripUndefined) as unknown as T
+    }
+    if (value !== null && typeof value === 'object') {
+        const result: Record<string, unknown> = {}
+        for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+            if (v !== undefined) {
+                result[k] = stripUndefined(v)
+            }
+        }
+        return result as T
+    }
+    return value
 }
 
 export function useUserDoc() {
     const [data, setData] = useState<UserDoc>(DEFAULT_USER_DOC)
     const [loading, setLoading] = useState(true)
-    // dataRef lets our callbacks always see current data without
-    // needing to be in dependency arrays (which would cause re-renders)
     const dataRef = useRef<UserDoc>(DEFAULT_USER_DOC)
 
     useEffect(() => {
@@ -43,9 +66,8 @@ export function useUserDoc() {
         })
 
         return unsub
-    }, []) // runs once on mount
+    }, [])
 
-    // useCallback with empty deps — safe because it only touches dataRef (a ref, not state)
     const updateField = useCallback(<K extends keyof UserDoc>(
         field: K,
         updater: UserDoc[K] | ((prev: UserDoc[K]) => UserDoc[K])
@@ -55,21 +77,22 @@ export function useUserDoc() {
                 ? (updater as (prev: UserDoc[K]) => UserDoc[K])(dataRef.current[field])
                 : updater
 
-        // Optimistic local update
+        // Optimistic local update (keep undefined for local state — fine in JS)
         const nextData = { ...dataRef.current, [field]: next }
         setData(nextData)
         dataRef.current = nextData
 
-        // Persist just the changed field
-        updateDoc(USER_REF(), { [field]: next }).catch((err) => {
-            // Doc might not exist yet on first write — fall back to setDoc
+        // Strip undefined before sending to Firestore
+        const safeValue = stripUndefined(next)
+
+        updateDoc(USER_REF(), { [field]: safeValue }).catch((err) => {
             if (err.code === 'not-found') {
-                setDoc(USER_REF(), nextData).catch(console.error)
+                setDoc(USER_REF(), stripUndefined(nextData)).catch(console.error)
             } else {
                 console.error(`Failed to update "${field}":`, err)
             }
         })
-    }, []) // stable — never recreated
+    }, [])
 
     const setWeeks = useCallback(
         (updater: WeeksMap | ((prev: WeeksMap) => WeeksMap)) =>
@@ -95,6 +118,18 @@ export function useUserDoc() {
         [updateField]
     )
 
+    const setJournalByDay = useCallback(
+        (updater: Record<string, string> | ((prev: Record<string, string>) => Record<string, string>)) =>
+            updateField('journalByDay', updater),
+        [updateField]
+    )
+
+    const setChatsByDay = useCallback(
+        (updater: Record<string, ChatMessage[]> | ((prev: Record<string, ChatMessage[]>) => Record<string, ChatMessage[]>)) =>
+            updateField('chatsByDay', updater),
+        [updateField]
+    )
+
     return {
         loading,
         weeks: data.weeks,
@@ -105,5 +140,9 @@ export function useUserDoc() {
         setTasksByDay,
         notesByDay: data.notesByDay,
         setNotesByDay,
+        journalByDay: data.journalByDay,
+        setJournalByDay,
+        chatsByDay: data.chatsByDay,
+        setChatsByDay,
     }
 }

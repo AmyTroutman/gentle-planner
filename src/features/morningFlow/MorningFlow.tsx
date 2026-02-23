@@ -11,7 +11,9 @@ import TransitionStep from './steps/TransitionStep'
 import TasksPage from '../tasks/TasksPage'
 import type { Task } from '../tasks/tasks.types'
 import type { DailyMeals } from '../meals/meals.types'
+import type { ChatMessage } from '../journal/journal.types'
 import HistoryPage from '../history/HistoryPage'
+import JournalPage from '../journal/JournalPage'
 import WeeklyThemeSetupStep from './steps/WeeklyThemeSetupStep'
 import WeeklyResetFlow from '../weeklyReset/WeeklyResetFlow'
 
@@ -26,15 +28,21 @@ export default function MorningFlow() {
         mealsByDay, setMealsByDay,
         tasksByDay, setTasksByDay,
         notesByDay, setNotesByDay,
+        journalByDay, setJournalByDay,
+        chatsByDay, setChatsByDay,
     } = useUserDoc()
 
     const weekHasTheme = Boolean(weeks[weekId]?.theme?.trim())
     const hasCompletedMorningFlow = Boolean(mealsByDay[dayId]?.breakfast)
 
+    // Sunday nudge: show if today is Sunday and this week's reset isn't done
+    const isSunday = new Date().getDay() === 0
+    const weeklyResetDone = Boolean((weeks[weekId] as any)?.weeklyReset?.completed)
+    const showResetNudge = isSunday && !weeklyResetDone
+
     const [step, setStep] = useState<MorningStep>('greeting')
     const [stepInitialized, setStepInitialized] = useState(false)
 
-    // Set the initial step once Firestore data has loaded
     useEffect(() => {
         if (loading || stepInitialized) return
         if (!weekHasTheme) {
@@ -48,16 +56,22 @@ export default function MorningFlow() {
     }, [loading, stepInitialized, weekHasTheme, hasCompletedMorningFlow])
 
     const [showHistory, setShowHistory] = useState(false)
+    const [showJournal, setShowJournal] = useState(false)
+    const [isWeeklyResetOpen, setIsWeeklyResetOpen] = useState(false)
 
     const todaysMeals: DailyMeals = mealsByDay[dayId] ?? { snacks: [], drinks: [] }
     const todaysTasks = tasksByDay[dayId] ?? []
     const todaysNote = notesByDay[dayId] ?? ''
+    const todaysJournal = journalByDay[dayId] ?? ''
+    const todaysChat: ChatMessage[] = chatsByDay[dayId] ?? []
 
-    const weeklyTheme = weeks[weekId]?.theme
+    const weeklyTheme = weeks[weekId]?.theme ?? ''
     const weeklyTasks = weeks[weekId]?.weeklyTasks ?? []
     const reflections = weeks[weekId]?.reflections ?? []
 
-    const [isWeeklyResetOpen, setIsWeeklyResetOpen] = useState(false)
+    const todaysReflection = reflections
+        .filter((r) => r.dayId === dayId)
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]?.text ?? ''
 
     useEffect(() => {
         if (loading) return
@@ -71,11 +85,7 @@ export default function MorningFlow() {
                     reflections: [],
                     affirmationsByDay: {},
                     weeklyTasks: [],
-                    weeklyReset: {
-                        completed: false,
-                        lookback: {},
-                        taskDecisions: {},
-                    },
+                    weeklyReset: { completed: false, lookback: {}, taskDecisions: {} },
                 },
             }
         })
@@ -95,20 +105,15 @@ export default function MorningFlow() {
 
         if (!week.affirmationsByDay[dayId]) {
             const affirmation = pickAffirmation()
-
             setWeeks((prev) => {
                 const existing = prev[weekId]
                 if (!existing) return prev
                 if (existing.affirmationsByDay[dayId]) return prev
-
                 return {
                     ...prev,
                     [weekId]: {
                         ...existing,
-                        affirmationsByDay: {
-                            ...existing.affirmationsByDay,
-                            [dayId]: affirmation,
-                        },
+                        affirmationsByDay: { ...existing.affirmationsByDay, [dayId]: affirmation },
                     },
                 }
             })
@@ -116,8 +121,7 @@ export default function MorningFlow() {
     }, [weekId, dayId, weeks, setWeeks, loading])
 
     function pickAffirmation(): string {
-        const index = Math.floor(Math.random() * BASE_AFFIRMATIONS.length)
-        return BASE_AFFIRMATIONS[index]
+        return BASE_AFFIRMATIONS[Math.floor(Math.random() * BASE_AFFIRMATIONS.length)]
     }
 
     function refreshAffirmation() {
@@ -125,15 +129,12 @@ export default function MorningFlow() {
     }
 
     function getTodayAffirmation(): string {
-        const existing = weeks[weekId]?.affirmationsByDay?.[dayId]
-        if (existing) return existing
-        return pickAffirmation()
+        return weeks[weekId]?.affirmationsByDay?.[dayId] ?? pickAffirmation()
     }
 
     function setTodayAffirmation(affirmation: string) {
         const cleaned = affirmation.trim()
         if (!cleaned) return
-
         setWeeks((prev) => {
             const existing = prev[weekId]
             if (!existing) return prev
@@ -152,7 +153,6 @@ export default function MorningFlow() {
     function setWeekTheme(theme: string) {
         const cleaned = theme.trim()
         if (!cleaned) return
-
         setWeeks((prev) => {
             const existing = prev[weekId]
             if (!existing) return prev
@@ -160,17 +160,41 @@ export default function MorningFlow() {
         })
     }
 
+    function handleReflectionChange(text: string) {
+        setWeeks((prev) => {
+            const existing = prev[weekId]
+            if (!existing) return prev
+
+            const existingToday = existing.reflections.find((r) => r.dayId === dayId)
+            const otherReflections = existing.reflections.filter((r) => r.dayId !== dayId)
+            const todayReflection: Reflection = {
+                id: existingToday?.id ?? crypto.randomUUID(),
+                text,
+                createdAt: new Date().toISOString(),
+                dayId,
+            }
+
+            return {
+                ...prev,
+                [weekId]: {
+                    ...existing,
+                    reflections: text.trim()
+                        ? [todayReflection, ...otherReflections]
+                        : otherReflections,
+                },
+            }
+        })
+    }
+
     function addReflection(text: string) {
         const cleaned = text.trim()
         if (!cleaned) return
-
         const newItem: Reflection = {
             id: crypto.randomUUID(),
             text: cleaned,
             createdAt: new Date().toISOString(),
             dayId,
         }
-
         setWeeks((prev) => {
             const existing = prev[weekId]
             if (!existing) return prev
@@ -193,14 +217,21 @@ export default function MorningFlow() {
         })
     }
 
+    function handleJournalChange(text: string) {
+        setJournalByDay((prev) => ({ ...prev, [dayId]: text }))
+    }
+
+    function handleChatChange(messages: ChatMessage[]) {
+        setChatsByDay((prev) => ({ ...prev, [dayId]: messages }))
+    }
+
+    function updateNote(value: string) {
+        setNotesByDay((prev) => ({ ...prev, [dayId]: value }))
+    }
+
     function next() {
         const order: MorningStep[] = [
-            'greeting',
-            'theme',
-            'affirmation',
-            'breakfast',
-            'transition',
-            'tasks',
+            'greeting', 'theme', 'affirmation', 'breakfast', 'transition', 'tasks',
         ]
         const currentIndex = order.indexOf(step)
         const nextStep = order[currentIndex + 1]
@@ -209,20 +240,16 @@ export default function MorningFlow() {
 
     function setBreakfastAndDrink(payload: { breakfast: string; drink: 'caf' | 'decaf' | 'tea' | 'none' }) {
         setSingleMeal('breakfast', payload.breakfast)
-
         if (payload.drink !== 'none') {
-            const label =
-                payload.drink === 'caf' ? 'Caf' : payload.drink === 'decaf' ? 'Decaf' : 'Tea'
+            const label = payload.drink === 'caf' ? 'Caf' : payload.drink === 'decaf' ? 'Decaf' : 'Tea'
             addDrink(label)
         }
-
         next()
     }
 
     function setSingleMeal(type: 'breakfast' | 'lunch' | 'dinner', text: string) {
         const cleaned = text.trim()
         if (!cleaned) return
-
         setMealsByDay((prev) => {
             const current = prev[dayId] ?? { snacks: [], drinks: [] }
             return { ...prev, [dayId]: { ...current, [type]: cleaned } }
@@ -241,9 +268,7 @@ export default function MorningFlow() {
     function addSnack(text: string) {
         const cleaned = text.trim()
         if (!cleaned) return
-
         const snack = { id: crypto.randomUUID(), text: cleaned, createdAt: new Date().toISOString() }
-
         setMealsByDay((prev) => ({
             ...prev,
             [dayId]: {
@@ -263,15 +288,10 @@ export default function MorningFlow() {
     function addDrink(text: string) {
         const cleaned = text.trim()
         if (!cleaned) return
-
         const drink = { id: crypto.randomUUID(), text: cleaned, createdAt: new Date().toISOString() }
-
         setMealsByDay((prev) => {
             const current = prev[dayId] ?? { snacks: [], drinks: [] }
-            return {
-                ...prev,
-                [dayId]: { ...current, drinks: [drink, ...(current.drinks ?? [])] },
-            }
+            return { ...prev, [dayId]: { ...current, drinks: [drink, ...(current.drinks ?? [])] } }
         })
     }
 
@@ -310,16 +330,12 @@ export default function MorningFlow() {
 
     function addWeeklyTask(title: string) {
         const t: Task = { id: crypto.randomUUID(), title, done: false, createdAt: new Date().toISOString() }
-
         setWeeks((prev) => {
             const existing = prev[weekId]
             return {
                 ...prev,
                 [weekId]: {
-                    weekId,
-                    theme: existing?.theme ?? weeklyTheme,
-                    reflections: existing?.reflections ?? [],
-                    affirmationsByDay: existing?.affirmationsByDay ?? {},
+                    ...existing,
                     weeklyTasks: [t, ...(existing?.weeklyTasks ?? [])],
                 },
             }
@@ -358,11 +374,6 @@ export default function MorningFlow() {
         })
     }
 
-    function updateNote(value: string) {
-        setNotesByDay((prev) => ({ ...prev, [dayId]: value }))
-    }
-
-    // ─── Loading state ────────────────────────────────────────────────────────
     if (loading) {
         return (
             <main style={{ padding: '3rem', maxWidth: 700 }}>
@@ -370,6 +381,8 @@ export default function MorningFlow() {
             </main>
         )
     }
+
+    const showTasksMain = step === 'tasks' && !showHistory && !showJournal && !isWeeklyResetOpen
 
     return (
         <main style={{ padding: '3rem', maxWidth: 700 }}>
@@ -419,7 +432,7 @@ export default function MorningFlow() {
 
             {step === 'transition' && <TransitionStep onDone={next} />}
 
-            {step === 'tasks' && !showHistory && !isWeeklyResetOpen && (
+            {showTasksMain && (
                 <TasksPage
                     weeklyTheme={weeklyTheme}
                     dailyAffirmation={dailyAffirmation}
@@ -440,8 +453,23 @@ export default function MorningFlow() {
                     onDeleteDrink={deleteDrink}
                     note={todaysNote}
                     onNoteChange={updateNote}
+                    showResetNudge={showResetNudge}
+                    onOpenJournal={() => setShowJournal(true)}
                     onOpenHistory={() => setShowHistory(true)}
                     onOpenWeeklyReset={() => setIsWeeklyResetOpen(true)}
+                />
+            )}
+
+            {step === 'tasks' && showJournal && (
+                <JournalPage
+                    reflection={todaysReflection}
+                    weeklyTheme={weeklyTheme}
+                    onReflectionChange={handleReflectionChange}
+                    journal={todaysJournal}
+                    onJournalChange={handleJournalChange}
+                    messages={todaysChat}
+                    onMessagesChange={handleChatChange}
+                    onClose={() => setShowJournal(false)}
                 />
             )}
 
@@ -451,6 +479,8 @@ export default function MorningFlow() {
                     tasksByDay={tasksByDay}
                     mealsByDay={mealsByDay}
                     notesByDay={notesByDay}
+                    journalByDay={journalByDay}
+                    chatsByDay={chatsByDay}
                     onClose={() => setShowHistory(false)}
                 />
             )}

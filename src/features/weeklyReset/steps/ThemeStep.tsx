@@ -39,17 +39,17 @@ export default function ThemeStep({ pausePrompt, theme, inspiration, behavior, o
                     </label>
 
                     <label style={{ display: 'grid', gap: '0.35rem' }}>
-                        <span>What feels important to carry into this week?</span>
-                        <input value={t} onChange={(e) => setT(e.target.value)} />
-                    </label>
-
-                    <label style={{ display: 'grid', gap: '0.35rem' }}>
                         <span>What is this pointing you toward?</span>
                         <textarea value={i} onChange={(e) => setI(e.target.value)} rows={3} />
                     </label>
 
                     <label style={{ display: 'grid', gap: '0.35rem' }}>
-                        <span>One small way you might live this</span>
+                        <span>What feels important to carry into this week?</span>
+                        <input value={t} onChange={(e) => setT(e.target.value)} />
+                    </label>
+
+                    <label style={{ display: 'grid', gap: '0.35rem' }}>
+                        <span>One small way you might live this:</span>
                         <input value={b} onChange={(e) => setB(e.target.value)} />
                     </label>
 
