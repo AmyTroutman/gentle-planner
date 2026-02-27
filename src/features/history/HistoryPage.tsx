@@ -33,6 +33,52 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
     )
 }
 
+function TaskListItem({ task, done }: { task: Task; done: boolean }) {
+    const subtasks = task.subtasks ?? []
+    const doneCount = subtasks.filter((s) => s.done).length
+
+    return (
+        <li style={{ marginBottom: subtasks.length > 0 ? '0.5rem' : 0 }}>
+            <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.4rem',
+                textDecoration: done ? 'line-through' : 'none',
+                color: done ? 'var(--muted)' : 'inherit',
+            }}>
+                {task.title}
+                {subtasks.length > 0 && (
+                    <span style={{
+                        fontSize: '0.72rem',
+                        padding: '0.1rem 0.4rem',
+                        borderRadius: 20,
+                        background: doneCount === subtasks.length ? '#dcfce7' : '#f3f4f6',
+                        color: doneCount === subtasks.length ? '#166534' : 'var(--muted)',
+                        fontWeight: 600,
+                        whiteSpace: 'nowrap',
+                    }}>
+                        {doneCount}/{subtasks.length}
+                    </span>
+                )}
+            </div>
+            {subtasks.length > 0 && (
+                <ul style={{ margin: '0.25rem 0 0', paddingLeft: '1.1rem', display: 'grid', gap: '0.15rem' }}>
+                    {subtasks.map((s) => (
+                        <li key={s.id} style={{
+                            fontSize: '0.85rem',
+                            color: s.done ? 'var(--muted)' : '#4b5563',
+                            textDecoration: s.done ? 'line-through' : 'none',
+                            listStyleType: 'circle',
+                        }}>
+                            {s.title}
+                        </li>
+                    ))}
+                </ul>
+            )}
+        </li>
+    )
+}
+
 export default function HistoryPage({
     weeks,
     tasksByDay,
@@ -158,16 +204,18 @@ export default function HistoryPage({
                                         <div>
                                             <strong>Open</strong>
                                             <ul style={{ margin: '0.4rem 0 0', paddingLeft: '1.25rem' }}>
-                                                {openDayTasks.map((t) => <li key={t.id}>{t.title}</li>)}
+                                                {openDayTasks.map((t) => (
+                                                    <TaskListItem key={t.id} task={t} done={false} />
+                                                ))}
                                             </ul>
                                         </div>
                                     )}
                                     {doneDayTasks.length > 0 && (
                                         <div>
                                             <strong>Done</strong>
-                                            <ul style={{ margin: '0.4rem 0 0', paddingLeft: '1.25rem', color: 'var(--muted)' }}>
+                                            <ul style={{ margin: '0.4rem 0 0', paddingLeft: '1.25rem' }}>
                                                 {doneDayTasks.map((t) => (
-                                                    <li key={t.id} style={{ textDecoration: 'line-through' }}>{t.title}</li>
+                                                    <TaskListItem key={t.id} task={t} done={true} />
                                                 ))}
                                             </ul>
                                         </div>
@@ -211,16 +259,18 @@ export default function HistoryPage({
                                         <div>
                                             <strong>Open</strong>
                                             <ul style={{ margin: '0.4rem 0 0', paddingLeft: '1.25rem' }}>
-                                                {openWeekly.map((t) => <li key={t.id}>{t.title}</li>)}
+                                                {openWeekly.map((t) => (
+                                                    <TaskListItem key={t.id} task={t} done={false} />
+                                                ))}
                                             </ul>
                                         </div>
                                     )}
                                     {doneWeekly.length > 0 && (
                                         <div>
                                             <strong>Done</strong>
-                                            <ul style={{ margin: '0.4rem 0 0', paddingLeft: '1.25rem', color: 'var(--muted)' }}>
+                                            <ul style={{ margin: '0.4rem 0 0', paddingLeft: '1.25rem' }}>
                                                 {doneWeekly.map((t) => (
-                                                    <li key={t.id} style={{ textDecoration: 'line-through' }}>{t.title}</li>
+                                                    <TaskListItem key={t.id} task={t} done={true} />
                                                 ))}
                                             </ul>
                                         </div>
@@ -261,30 +311,19 @@ export default function HistoryPage({
 
                     {chat.length > 0 && (
                         <Card title="Chat">
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                            <div style={{ display: 'grid', gap: '0.75rem' }}>
                                 {chat.map((msg, i) => (
-                                    <div
-                                        key={i}
-                                        style={{
-                                            display: 'flex',
-                                            justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start',
-                                        }}
-                                    >
-                                        <div
-                                            style={{
-                                                maxWidth: '80%',
-                                                padding: '0.65rem 0.9rem',
-                                                borderRadius: msg.role === 'user' ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
-                                                background: msg.role === 'user' ? '#2c454d' : '#f9fafb',
-                                                color: msg.role === 'user' ? 'white' : 'inherit',
-                                                border: msg.role === 'assistant' ? '1px solid #d1d5db' : 'none',
-                                                fontSize: '0.9rem',
-                                                lineHeight: 1.6,
-                                                whiteSpace: 'pre-wrap',
-                                            }}
-                                        >
-                                            {msg.content}
-                                        </div>
+                                    <div key={i} style={{
+                                        padding: '0.6rem 0.8rem',
+                                        borderRadius: 10,
+                                        background: msg.role === 'user' ? '#f3f4f6' : '#f0fdf4',
+                                        fontSize: '0.9rem',
+                                        lineHeight: 1.5,
+                                    }}>
+                                        <span style={{ fontWeight: 600, color: 'var(--muted)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                            {msg.role === 'user' ? 'You' : 'Claude'}
+                                        </span>
+                                        <p style={{ margin: '0.25rem 0 0', whiteSpace: 'pre-wrap' }}>{msg.content}</p>
                                     </div>
                                 ))}
                             </div>

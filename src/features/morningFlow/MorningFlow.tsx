@@ -331,6 +331,29 @@ export default function MorningFlow() {
         }))
     }
 
+    function updateTask(updated: Task) {
+        setTasksByDay((prev) => ({
+            ...prev,
+            [dayId]: (prev[dayId] ?? []).map((t) => t.id === updated.id ? updated : t),
+        }))
+    }
+
+    function updateWeeklyTask(updated: Task) {
+        setWeeks((prev) => {
+            const existing = prev[weekId]
+            if (!existing) return prev
+            return {
+                ...prev,
+                [weekId]: {
+                    ...existing,
+                    weeklyTasks: (existing.weeklyTasks ?? []).map((t) =>
+                        t.id === updated.id ? updated : t
+                    ),
+                },
+            }
+        })
+    }
+
     function addWeeklyTask(title: string) {
         const t: Task = { id: crypto.randomUUID(), title, done: false, createdAt: new Date().toISOString() }
         setWeeks((prev) => {
@@ -447,6 +470,8 @@ export default function MorningFlow() {
                     onAddWeeklyTask={addWeeklyTask}
                     onToggleWeeklyTask={toggleWeeklyTask}
                     onDeleteWeeklyTask={deleteWeeklyTask}
+                    onUpdateTask={updateTask}
+                    onUpdateWeeklyTask={updateWeeklyTask}
                     meals={todaysMeals}
                     onSetMeal={setSingleMeal}
                     onClearMeal={clearSingleMeal}

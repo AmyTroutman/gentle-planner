@@ -1,14 +1,16 @@
 import { useMemo, useState } from 'react'
 import type { Task } from './tasks.types'
+import TaskItem from './TaskItem'
 
 type Props = {
     tasks: Task[]
     onAdd: (title: string) => void
     onToggle: (id: string) => void
     onDelete: (id: string) => void
+    onUpdate: (task: Task) => void
 }
 
-export default function TodayTasks({ tasks, onAdd, onToggle, onDelete }: Props) {
+export default function TodayTasks({ tasks, onAdd, onToggle, onDelete, onUpdate }: Props) {
     const [title, setTitle] = useState('')
 
     const { openTasks, doneTasks } = useMemo(() => {
@@ -39,9 +41,7 @@ export default function TodayTasks({ tasks, onAdd, onToggle, onDelete }: Props) 
                         border: '1px solid #d1d5db',
                         fontSize: '1rem',
                     }}
-                    onKeyDown={(e) => {
-                        if (e.key === 'Enter') submit()
-                    }}
+                    onKeyDown={(e) => { if (e.key === 'Enter') submit() }}
                 />
                 <button
                     onClick={submit}
@@ -59,55 +59,23 @@ export default function TodayTasks({ tasks, onAdd, onToggle, onDelete }: Props) 
             </div>
 
             {openTasks.length === 0 && (
-                <p style={{ margin: 0, color: 'var(--muted)' }}>
-                    You're all clear, kid!
-                </p>
+                <p style={{ margin: 0, color: 'var(--muted)' }}>You're all clear, kid!</p>
             )}
 
-            {/* Open tasks */}
             {openTasks.length > 0 && (
                 <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: '0.5rem' }}>
                     {openTasks.map((t) => (
-                        <li
+                        <TaskItem
                             key={t.id}
-                            style={{
-                                display: 'grid',
-                                gridTemplateColumns: '18px 1fr auto',
-                                alignItems: 'center',
-                                columnGap: '0.45rem',
-                                padding: '0.65rem 0.75rem',
-                                borderRadius: 12,
-                                border: '1px solid #d1d5db',
-                                background: 'white',
-                            }}
-                        >
-                            <input
-                                type="checkbox"
-                                checked={t.done}
-                                onChange={() => onToggle(t.id)}
-                                style={{ margin: 0, width: 18, height: 18 }}
-                            />
-                            <span style={{ minWidth: 0, lineHeight: 1.25 }}>
-                                {t.title}
-                            </span>
-                            <button
-                                onClick={() => onDelete(t.id)}
-                                style={{
-                                    border: '1px solid transparent',
-                                    background: 'transparent',
-                                    color: 'var(--muted)',
-                                    cursor: 'pointer',
-                                }}
-                                title="Delete"
-                            >
-                                Delete
-                            </button>
-                        </li>
+                            task={t}
+                            onToggle={() => onToggle(t.id)}
+                            onDelete={() => onDelete(t.id)}
+                            onUpdate={onUpdate}
+                        />
                     ))}
                 </ul>
             )}
 
-            {/* Done tasks */}
             {doneTasks.length > 0 && (
                 <details>
                     <summary style={{ cursor: 'pointer', color: 'var(--muted)' }}>
@@ -115,42 +83,13 @@ export default function TodayTasks({ tasks, onAdd, onToggle, onDelete }: Props) 
                     </summary>
                     <ul style={{ listStyle: 'none', padding: 0, marginTop: '0.5rem', display: 'grid', gap: '0.5rem' }}>
                         {doneTasks.map((t) => (
-                            <li
+                            <TaskItem
                                 key={t.id}
-                                style={{
-                                    display: 'grid',
-                                    gridTemplateColumns: '18px 1fr auto',
-                                    alignItems: 'center',
-                                    columnGap: '0.45rem',
-                                    padding: '0.65rem 0.75rem',
-                                    borderRadius: 12,
-                                    border: '1px solid #d1d5db',
-                                    background: 'white',
-                                    opacity: 0.8,
-                                }}
-                            >
-                                <input
-                                    type="checkbox"
-                                    checked={t.done}
-                                    onChange={() => onToggle(t.id)}
-                                    style={{ margin: 0, width: 18, height: 18 }}
-                                />
-                                <span style={{ minWidth: 0, lineHeight: 1.25 }}>
-                                    {t.title}
-                                </span>
-                                <button
-                                    onClick={() => onDelete(t.id)}
-                                    style={{
-                                        border: '1px solid transparent',
-                                        background: 'transparent',
-                                        color: 'var(--muted)',
-                                        cursor: 'pointer',
-                                    }}
-                                    title="Delete"
-                                >
-                                    Delete
-                                </button>
-                            </li>
+                                task={t}
+                                onToggle={() => onToggle(t.id)}
+                                onDelete={() => onDelete(t.id)}
+                                onUpdate={onUpdate}
+                            />
                         ))}
                     </ul>
                 </details>

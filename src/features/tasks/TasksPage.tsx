@@ -15,12 +15,14 @@ type Props = {
     onAddTask: (title: string) => void
     onToggleTask: (id: string) => void
     onDeleteTask: (id: string) => void
+    onUpdateTask: (task: Task) => void
 
     // Weekly tasks
     weeklyTasks: Task[]
     onAddWeeklyTask: (title: string) => void
     onToggleWeeklyTask: (id: string) => void
     onDeleteWeeklyTask: (id: string) => void
+    onUpdateWeeklyTask: (task: Task) => void
 
     // Meals
     meals: DailyMeals
@@ -80,11 +82,13 @@ export default function TasksPage({
     onAddTask,
     onToggleTask,
     onDeleteTask,
+    onUpdateTask,
 
     weeklyTasks,
     onAddWeeklyTask,
     onToggleWeeklyTask,
     onDeleteWeeklyTask,
+    onUpdateWeeklyTask,
 
     meals,
     onSetMeal,
@@ -163,7 +167,11 @@ export default function TasksPage({
                 {/* Main column */}
                 <div style={{ display: 'grid', gap: '1.25rem' }}>
                     <Card title="Today">
-                        <TodayTasks tasks={tasks} onAdd={onAddTask} onToggle={onToggleTask} onDelete={onDeleteTask} />
+                        <TodayTasks tasks={tasks} 
+                        onAdd={onAddTask} 
+                        onToggle={onToggleTask} 
+                        onDelete={onDeleteTask} 
+                        onUpdate={onUpdateTask} />
                     </Card>
 
                     <Card title="This Week">
@@ -172,6 +180,7 @@ export default function TasksPage({
                             onAdd={onAddWeeklyTask}
                             onToggle={onToggleWeeklyTask}
                             onDelete={onDeleteWeeklyTask}
+                            onUpdate={onUpdateWeeklyTask}
                         />
                     </Card>
                 </div>
