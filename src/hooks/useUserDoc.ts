@@ -5,6 +5,7 @@ import type { WeeksMap } from '../features/morningFlow/morningFlow.types'
 import type { DailyMeals } from '../features/meals/meals.types'
 import type { Task } from '../features/tasks/tasks.types'
 import type { ChatMessage } from '../features/journal/journal.types'
+import type { NotebooksMap } from '../features/notebooks/notebooks.types'
 
 const USER_ID = 'me'
 const USER_REF = () => doc(db, 'users', USER_ID)
@@ -16,6 +17,7 @@ export type UserDoc = {
     notesByDay: Record<string, string>
     journalByDay: Record<string, string>
     chatsByDay: Record<string, ChatMessage[]>
+    notebooks: NotebooksMap
 }
 
 const DEFAULT_USER_DOC: UserDoc = {
@@ -25,6 +27,7 @@ const DEFAULT_USER_DOC: UserDoc = {
     notesByDay: {},
     journalByDay: {},
     chatsByDay: {},
+    notebooks: {},
 }
 
 /**
@@ -130,6 +133,12 @@ export function useUserDoc() {
         [updateField]
     )
 
+    const setNotebooks = useCallback(
+        (updater: NotebooksMap | ((prev: NotebooksMap) => NotebooksMap)) =>
+            updateField('notebooks', updater),
+        [updateField]
+    )
+
     return {
         loading,
         weeks: data.weeks,
@@ -144,5 +153,7 @@ export function useUserDoc() {
         setJournalByDay,
         chatsByDay: data.chatsByDay,
         setChatsByDay,
+        notebooks: data.notebooks,
+        setNotebooks,
     }
 }

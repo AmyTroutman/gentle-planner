@@ -16,6 +16,7 @@ import HistoryPage from '../history/HistoryPage'
 import JournalPage from '../journal/JournalPage'
 import WeeklyThemeSetupStep from './steps/WeeklyThemeSetupStep'
 import WeeklyResetFlow from '../weeklyReset/WeeklyResetFlow'
+import NotebooksSection from '../notebooks/NotebooksSection'
 
 export default function MorningFlow() {
 
@@ -30,6 +31,7 @@ export default function MorningFlow() {
         notesByDay, setNotesByDay,
         journalByDay, setJournalByDay,
         chatsByDay, setChatsByDay,
+        notebooks, setNotebooks,
     } = useUserDoc()
 
     const weekHasTheme = Boolean(weeks[weekId]?.theme?.trim())
@@ -57,6 +59,7 @@ export default function MorningFlow() {
 
     const [showHistory, setShowHistory] = useState(false)
     const [showJournal, setShowJournal] = useState(false)
+    const [showNotebooks, setShowNotebooks] = useState(false)
     const [isWeeklyResetOpen, setIsWeeklyResetOpen] = useState(false)
 
     const todaysMeals: DailyMeals = mealsByDay[dayId] ?? { snacks: [], drinks: [] }
@@ -382,7 +385,7 @@ export default function MorningFlow() {
         )
     }
 
-    const showTasksMain = step === 'tasks' && !showHistory && !showJournal && !isWeeklyResetOpen
+    const showTasksMain = step === 'tasks' && !showHistory && !showJournal && !isWeeklyResetOpen && !showNotebooks
 
     return (
         <main style={{ padding: '3rem', maxWidth: 700 }}>
@@ -457,6 +460,7 @@ export default function MorningFlow() {
                     onOpenJournal={() => setShowJournal(true)}
                     onOpenHistory={() => setShowHistory(true)}
                     onOpenWeeklyReset={() => setIsWeeklyResetOpen(true)}
+                    onOpenNotebooks={() => setShowNotebooks(true)}
                 />
             )}
 
@@ -490,6 +494,14 @@ export default function MorningFlow() {
                     weeks={weeks}
                     setWeeks={setWeeks}
                     onClose={() => setIsWeeklyResetOpen(false)}
+                />
+            )}
+
+            {step === 'tasks' && showNotebooks && (
+                <NotebooksSection
+                    notebooks={notebooks}
+                    onUpdate={setNotebooks}
+                    onClose={() => setShowNotebooks(false)}
                 />
             )}
         </main>

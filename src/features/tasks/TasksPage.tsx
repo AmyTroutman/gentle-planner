@@ -4,7 +4,7 @@ import type { Task } from './tasks.types'
 import MealsAside from '../meals/MealsAside'
 import type { DailyMeals } from '../meals/meals.types'
 import NotesSection from '../notes/NotesSection'
-import styles from "./TasksPage.module.css";
+import styles from './TasksPage.module.css'
 
 type Props = {
     weeklyTheme: string
@@ -42,6 +42,7 @@ type Props = {
     onOpenJournal: () => void
     onOpenHistory: () => void
     onOpenWeeklyReset: () => void
+    onOpenNotebooks: () => void
 }
 
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
@@ -101,6 +102,7 @@ export default function TasksPage({
     onOpenJournal,
     onOpenHistory,
     onOpenWeeklyReset,
+    onOpenNotebooks,
 }: Props) {
     return (
         <section style={{ display: 'grid', gap: '1.25rem' }}>
@@ -117,6 +119,7 @@ export default function TasksPage({
                 {/* Nav buttons in a row */}
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
                     <button onClick={onOpenJournal} style={navButtonStyle}>Journal</button>
+                    <button onClick={onOpenNotebooks} style={navButtonStyle}>Notebooks</button>
                     <button onClick={onOpenHistory} style={navButtonStyle}>History</button>
                     <button onClick={onOpenWeeklyReset} style={navButtonStyle}>Weekly Reset</button>
                 </div>
