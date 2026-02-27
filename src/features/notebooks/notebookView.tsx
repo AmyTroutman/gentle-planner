@@ -59,13 +59,14 @@ export default function NotebookView({
             label,
             color: newTagColor,
         }
-        onUpdateTags([...notebook.tags, tag])
+        const currentTags = notebook.tags ?? []
+        onUpdateTags([...currentTags, tag])
         setNewTagLabel('')
-        setNewTagColor(TAG_PALETTE[(notebook.tags.length + 1) % TAG_PALETTE.length])
+        setNewTagColor(TAG_PALETTE[(currentTags.length + 1) % TAG_PALETTE.length])
     }
 
     function handleDeleteTag(tagId: string) {
-        onUpdateTags(notebook.tags.filter((t) => t.id !== tagId))
+        onUpdateTags((notebook.tags ?? []).filter((t) => t.id !== tagId))
         if (filterTagId === tagId) setFilterTagId(null)
     }
 
@@ -138,11 +139,11 @@ export default function NotebookView({
                     <strong style={{ fontSize: '0.9rem' }}>Notebook tags</strong>
 
                     {/* Existing tags */}
-                    {notebook.tags.length === 0 ? (
+                    {(notebook.tags ?? []).length === 0 ? (
                         <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--muted)' }}>No tags yet.</p>
                     ) : (
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
-                            {notebook.tags.map((tag) => (
+                            {(notebook.tags ?? []).map((tag) => (
                                 <div
                                     key={tag.id}
                                     style={{
@@ -232,7 +233,7 @@ export default function NotebookView({
             )}
 
             {/* Tag filter row */}
-            {notebook.tags.length > 0 && (
+            {(notebook.tags ?? []).length > 0 && (
                 <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
                     <button
                         onClick={() => setFilterTagId(null)}
@@ -249,7 +250,7 @@ export default function NotebookView({
                     >
                         All
                     </button>
-                    {notebook.tags.map((tag) => (
+                    {(notebook.tags ?? []).map((tag) => (
                         <button
                             key={tag.id}
                             onClick={() => setFilterTagId(filterTagId === tag.id ? null : tag.id)}
@@ -338,7 +339,7 @@ export default function NotebookView({
                 <div style={{ display: 'grid', gap: '0.5rem' }}>
                     {filteredPages.map((page) => {
                         const pageTags = (page.tagIds ?? [])
-                            .map((id) => notebook.tags.find((t) => t.id === id))
+                            .map((id) => (notebook.tags ?? []).find((t) => t.id === id))
                             .filter(Boolean) as typeof notebook.tags
                         return (
                             <div

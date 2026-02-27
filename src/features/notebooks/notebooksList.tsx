@@ -153,7 +153,6 @@ function NotebookSpine({
                     style={{
                         writingMode: 'vertical-rl',
                         textOrientation: 'mixed',
-                        transform: 'rotate(180deg)',
                         color: 'rgba(255,255,255,0.92)',
                         fontSize: '0.82rem',
                         fontWeight: 600,

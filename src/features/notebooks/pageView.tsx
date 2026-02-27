@@ -19,9 +19,10 @@ function tagTextColor(bg: string): string {
     return luminance > 0.55 ? '#374151' : '#fff'
 }
 
-export default function PageView({ page, notebookTitle, notebookEmoji, notebookTags, onBack, onUpdatePage }: Props) {
+export default function PageView({ page, notebookTitle, notebookEmoji, notebookTags = [], onBack, onUpdatePage }: Props) {
     const [editingTitle, setEditingTitle] = useState(false)
     const [titleDraft, setTitleDraft] = useState(page.title)
+    const [focusItemId, setFocusItemId] = useState<string | null>(null)
 
     function update(patch: Partial<NotebookPage>) {
         onUpdatePage({ ...page, ...patch, updatedAt: new Date().toISOString() })
@@ -72,6 +73,7 @@ export default function PageView({ page, notebookTitle, notebookEmoji, notebookT
         const block = page.blocks.find((b) => b.id === blockId)
         if (!block || block.type !== 'checklist') return
         const item: ChecklistItem = { id: crypto.randomUUID(), text: '', checked: false }
+        setFocusItemId(item.id)
         updateBlock(blockId, { items: [...block.items, item] })
     }
 
@@ -262,6 +264,12 @@ export default function PageView({ page, notebookTitle, notebookEmoji, notebookT
                                             />
                                             <input
                                                 value={item.text}
+                                                ref={(el) => {
+                                                    if (el && item.id === focusItemId) {
+                                                        el.focus()
+                                                        setFocusItemId(null)
+                                                    }
+                                                }}
                                                 onChange={(e) => updateChecklistItem(block.id, item.id, { text: e.target.value })}
                                                 onKeyDown={(e) => {
                                                     if (e.key === 'Enter') { e.preventDefault(); addChecklistItem(block.id) }
