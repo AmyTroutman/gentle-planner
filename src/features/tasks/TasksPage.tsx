@@ -3,7 +3,9 @@ import WeeklyTasks from './WeeklyTasks'
 import type { Task } from './tasks.types'
 import MealsAside from '../meals/MealsAside'
 import type { DailyMeals } from '../meals/meals.types'
-import NotesSection from '../notes/NotesSection'
+import TrackerAside from '../calendar/TrackerAside'
+import MonthlyTaskBox from '../calendar/MonthlyTaskBox'
+import type { DayTracker, CalendarEntry } from '../calendar/calendar.types'
 import styles from './TasksPage.module.css'
 
 type Props = {
@@ -37,14 +39,26 @@ type Props = {
     note: string
     onNoteChange: (value: string) => void
 
+    // Tracker
+    tracker: DayTracker
+    onTrackerChange: (updated: DayTracker) => void
+
+    // Monthly calendar entries
+    calendarEntriesByDay: Record<string, CalendarEntry[]>
+    todayDayId: string
+    currentWeekId: string
+    onPullEntryToDay: (entry: CalendarEntry, fromDayId: string) => void
+    onPullEntryToWeek: (entry: CalendarEntry, weekId: string) => void
+
     // Weekly reset nudge
     showResetNudge: boolean
 
     // Nav
     onOpenJournal: () => void
-    onOpenHistory: () => void
+    onOpenCalendar: () => void
     onOpenWeeklyReset: () => void
     onOpenNotebooks: () => void
+    onOpenTaskReview: () => void
 }
 
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
@@ -98,15 +112,22 @@ export default function TasksPage({
     onDeleteDrink,
     onAddDrink,
 
-    note,
-    onNoteChange,
+    tracker,
+    onTrackerChange,
+
+    calendarEntriesByDay,
+    todayDayId,
+    currentWeekId,
+    onPullEntryToDay,
+    onPullEntryToWeek,
 
     showResetNudge,
 
     onOpenJournal,
-    onOpenHistory,
+    onOpenCalendar,
     onOpenWeeklyReset,
     onOpenNotebooks,
+    onOpenTaskReview,
 }: Props) {
     return (
         <section style={{ display: 'grid', gap: '1.25rem' }}>
@@ -124,8 +145,9 @@ export default function TasksPage({
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
                     <button onClick={onOpenJournal} style={navButtonStyle}>Journal</button>
                     <button onClick={onOpenNotebooks} style={navButtonStyle}>Notebooks</button>
-                    <button onClick={onOpenHistory} style={navButtonStyle}>History</button>
+                    <button onClick={onOpenCalendar} style={navButtonStyle}>Calendar</button>
                     <button onClick={onOpenWeeklyReset} style={navButtonStyle}>Weekly Reset</button>
+                    <button onClick={onOpenTaskReview} style={navButtonStyle}>Review Tasks</button>
                 </div>
             </header>
 
@@ -167,11 +189,13 @@ export default function TasksPage({
                 {/* Main column */}
                 <div style={{ display: 'grid', gap: '1.25rem' }}>
                     <Card title="Today">
-                        <TodayTasks tasks={tasks} 
-                        onAdd={onAddTask} 
-                        onToggle={onToggleTask} 
-                        onDelete={onDeleteTask} 
-                        onUpdate={onUpdateTask} />
+                        <TodayTasks
+                            tasks={tasks}
+                            onAdd={onAddTask}
+                            onToggle={onToggleTask}
+                            onDelete={onDeleteTask}
+                            onUpdate={onUpdateTask}
+                        />
                     </Card>
 
                     <Card title="This Week">
@@ -183,13 +207,23 @@ export default function TasksPage({
                             onUpdate={onUpdateWeeklyTask}
                         />
                     </Card>
+
+                    <Card title="This Month">
+                        <MonthlyTaskBox
+                            calendarEntriesByDay={calendarEntriesByDay}
+                            currentWeekId={currentWeekId}
+                            todayDayId={todayDayId}
+                            onPullToDay={onPullEntryToDay}
+                            onPullToWeek={onPullEntryToWeek}
+                        />
+                    </Card>
                 </div>
 
                 {/* Aside */}
                 <div style={{ display: 'grid', gap: '1.25rem', alignContent: 'start' }}>
-                    <Card title="Notes">
+                    {/* <Card title="Notes">
                         <NotesSection note={note} onChange={onNoteChange} />
-                    </Card>
+                    </Card> */}
 
                     <aside
                         style={{
@@ -208,6 +242,17 @@ export default function TasksPage({
                             onAddDrink={onAddDrink}
                             onDeleteDrink={onDeleteDrink}
                         />
+                    </aside>
+
+                    <aside
+                        style={{
+                            padding: '1rem',
+                            borderRadius: 14,
+                            border: '1px solid #d1d5db',
+                            background: 'white',
+                        }}
+                    >
+                        <TrackerAside tracker={tracker} onChange={onTrackerChange} />
                     </aside>
                 </div>
             </div>

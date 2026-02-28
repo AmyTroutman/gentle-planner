@@ -7,6 +7,7 @@ export type MorningStep =
     | 'theme'
     | 'affirmation'
     | 'breakfast'
+    | 'taskReview'
     | 'transition'
     | 'tasks'
 
@@ -27,4 +28,3 @@ export type WeekData = {
 }
 
 export type WeeksMap = Record<string, WeekData>
-

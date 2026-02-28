@@ -5,6 +5,7 @@ import type { WeeksMap } from '../features/morningFlow/morningFlow.types'
 import type { DailyMeals } from '../features/meals/meals.types'
 import type { Task } from '../features/tasks/tasks.types'
 import type { ChatMessage } from '../features/journal/journal.types'
+import type { CalendarEntry, DayTracker } from '../features/calendar/calendar.types'
 import type { NotebooksMap } from '../features/notebooks/notebooks.types'
 
 const USER_ID = 'me'
@@ -17,7 +18,10 @@ export type UserDoc = {
     notesByDay: Record<string, string>
     journalByDay: Record<string, string>
     chatsByDay: Record<string, ChatMessage[]>
+    calendarEntriesByDay: Record<string, CalendarEntry[]>
+    trackersByDay: Record<string, DayTracker>
     notebooks: NotebooksMap
+
 }
 
 const DEFAULT_USER_DOC: UserDoc = {
@@ -27,13 +31,12 @@ const DEFAULT_USER_DOC: UserDoc = {
     notesByDay: {},
     journalByDay: {},
     chatsByDay: {},
+    calendarEntriesByDay: {},
+    trackersByDay: {},
     notebooks: {},
+
 }
 
-/**
- * Recursively remove undefined values from an object so Firestore doesn't reject them.
- * Firestore accepts null but not undefined.
- */
 function stripUndefined<T>(value: T): T {
     if (Array.isArray(value)) {
         return value.map(stripUndefined) as unknown as T
@@ -80,12 +83,10 @@ export function useUserDoc() {
                 ? (updater as (prev: UserDoc[K]) => UserDoc[K])(dataRef.current[field])
                 : updater
 
-        // Optimistic local update (keep undefined for local state — fine in JS)
         const nextData = { ...dataRef.current, [field]: next }
         setData(nextData)
         dataRef.current = nextData
 
-        // Strip undefined before sending to Firestore
         const safeValue = stripUndefined(next)
 
         updateDoc(USER_REF(), { [field]: safeValue }).catch((err) => {
@@ -133,6 +134,18 @@ export function useUserDoc() {
         [updateField]
     )
 
+    const setCalendarEntriesByDay = useCallback(
+        (updater: Record<string, CalendarEntry[]> | ((prev: Record<string, CalendarEntry[]>) => Record<string, CalendarEntry[]>)) =>
+            updateField('calendarEntriesByDay', updater),
+        [updateField]
+    )
+
+    const setTrackersByDay = useCallback(
+        (updater: Record<string, DayTracker> | ((prev: Record<string, DayTracker>) => Record<string, DayTracker>)) =>
+            updateField('trackersByDay', updater),
+        [updateField]
+    )
+
     const setNotebooks = useCallback(
         (updater: NotebooksMap | ((prev: NotebooksMap) => NotebooksMap)) =>
             updateField('notebooks', updater),
@@ -153,6 +166,10 @@ export function useUserDoc() {
         setJournalByDay,
         chatsByDay: data.chatsByDay,
         setChatsByDay,
+        calendarEntriesByDay: data.calendarEntriesByDay,
+        setCalendarEntriesByDay,
+        trackersByDay: data.trackersByDay,
+        setTrackersByDay,
         notebooks: data.notebooks,
         setNotebooks,
     }
