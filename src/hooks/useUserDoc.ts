@@ -21,7 +21,6 @@ export type UserDoc = {
     calendarEntriesByDay: Record<string, CalendarEntry[]>
     trackersByDay: Record<string, DayTracker>
     notebooks: NotebooksMap
-
 }
 
 const DEFAULT_USER_DOC: UserDoc = {
@@ -34,7 +33,6 @@ const DEFAULT_USER_DOC: UserDoc = {
     calendarEntriesByDay: {},
     trackersByDay: {},
     notebooks: {},
-
 }
 
 function stripUndefined<T>(value: T): T {
@@ -58,6 +56,12 @@ export function useUserDoc() {
     const [loading, setLoading] = useState(true)
     const dataRef = useRef<UserDoc>(DEFAULT_USER_DOC)
 
+    // Guards against writes firing before the first Firestore snapshot has loaded.
+    // Without this, any setWeeks/setX call that races the initial onSnapshot would
+    // write empty defaults over real data (the likely cause of the weeks wipe).
+    const loadedRef = useRef(false)
+    const pendingWrites = useRef<Array<() => void>>([])
+
     useEffect(() => {
         const ref = USER_REF()
 
@@ -69,6 +73,15 @@ export function useUserDoc() {
             setData(next)
             dataRef.current = next
             setLoading(false)
+
+            // On the very first snapshot, flush any writes that arrived early.
+            // They now run against real data instead of empty defaults.
+            if (!loadedRef.current) {
+                loadedRef.current = true
+                const queued = pendingWrites.current
+                pendingWrites.current = []
+                queued.forEach(fn => fn())
+            }
         })
 
         return unsub
@@ -78,6 +91,13 @@ export function useUserDoc() {
         field: K,
         updater: UserDoc[K] | ((prev: UserDoc[K]) => UserDoc[K])
     ) => {
+        // If the initial snapshot hasn't fired yet, queue this write rather than
+        // executing it against empty defaults, which would wipe Firestore data.
+        if (!loadedRef.current) {
+            pendingWrites.current.push(() => updateField(field, updater))
+            return
+        }
+
         const next =
             typeof updater === 'function'
                 ? (updater as (prev: UserDoc[K]) => UserDoc[K])(dataRef.current[field])
