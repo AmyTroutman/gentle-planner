@@ -1,0 +1,77 @@
+name: Daily Firestore Backup
+
+on:
+  schedule:
+    - cron: '0 8 * * *'  # 2am CST (UTC-6) = 8am UTC
+  workflow_dispatch:       # allows manual trigger from GitHub Actions tab
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install firebase-admin
+
+      - name: Write service account key
+        run: |
+          echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > /tmp/service-account.json
+
+      - name: Run backup
+        run: |
+          python3 - <<'EOF'
+          import json, os
+          from datetime import datetime, timezone
+          from pathlib import Path
+          import firebase_admin
+          from firebase_admin import credentials, firestore
+
+          cred = credentials.Certificate("/tmp/service-account.json")
+          firebase_admin.initialize_app(cred)
+          db = firestore.client()
+
+          snap = db.document("users", "me").get()
+          if not snap.exists:
+              print("Document users/me not found — nothing to back up.")
+              exit(1)
+
+          data = snap.to_dict()
+
+          def serialize(obj):
+              if hasattr(obj, "isoformat"):
+                  return obj.isoformat()
+              raise TypeError(f"Not serializable: {type(obj)}")
+
+          backup_dir = Path("backups")
+          backup_dir.mkdir(exist_ok=True)
+
+          ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%SZ")
+          out = backup_dir / f"gentle-planner-backup-{ts}.json"
+          out.write_text(json.dumps(data, indent=2, default=serialize, ensure_ascii=False))
+
+          weeks = data.get("weeks", {})
+          print(f"✅ Backup written: {out.name}")
+          print(f"   Weeks backed up: {sorted(weeks.keys())}")
+
+          # Prune — keep only the 30 most recent backups
+          all_backups = sorted(backup_dir.glob("gentle-planner-backup-*.json"))
+          for old in all_backups[:-30]:
+              old.unlink()
+              print(f"🗑  Pruned: {old.name}")
+          EOF
+
+      - name: Commit backup to repo
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add backups/
+          git diff --cached --quiet || git commit -m "chore: daily Firestore backup $(date -u '+%Y-%m-%d')"
+          git push
