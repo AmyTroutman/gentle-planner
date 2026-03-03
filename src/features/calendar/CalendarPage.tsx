@@ -8,17 +8,19 @@ import type { CalendarEntry, CalendarTag, DayTracker, TrackerTag } from './calen
 import TrackerAside from './TrackerAside'
 
 // Only event and task are calendar entry tags now
-const TAG_OPTIONS: CalendarTag[] = ['event', 'task']
+const TAG_OPTIONS: CalendarTag[] = ['event', 'task', 'game']
 
 const TAG_COLORS: Record<CalendarTag, { bg: string; border: string; text: string }> = {
     event: { bg: '#e0f2fe', border: '#0ea5e9', text: '#0369a1' },
     task: { bg: '#ede9fe', border: '#8b5cf6', text: '#6d28d9' },
+    game: { bg: '#e9feea', border: '#00653e', text: '#004833' },
 }
 
 // Dot colors for calendar grid — entries + tracker data
 const ENTRY_DOT_COLORS: Record<CalendarTag, string> = {
     event: '#0ea5e9',
     task: '#8b5cf6',
+    game: '#00653e'
 }
 
 const TRACKER_DOT_COLORS: Record<TrackerTag, string> = {

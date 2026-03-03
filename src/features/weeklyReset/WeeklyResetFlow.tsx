@@ -233,12 +233,17 @@ export default function WeeklyResetFlow({ weeks, setWeeks, onClose }: Props) {
                         if (decision === 'carry') {
                             const t = prevWeeklyTasks.find((x) => x.id === taskId)
                             if (!t) return
-
+                            
                             const newTask: Task = {
                                 id: crypto.randomUUID(),
                                 title: t.title,
                                 done: false,
                                 createdAt: new Date().toISOString(),
+                                subtasks: t.subtasks?.map((s) => ({
+                                    ...s,
+                                    id: crypto.randomUUID(),
+                                    done: false,
+                                })),
                             }
 
                             setWeeks((prev) => {

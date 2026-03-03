@@ -35,8 +35,9 @@ export default function MonthlyTaskBox({
         const entries = calendarEntriesByDay[dayId] ?? []
         for (const entry of entries) {
             const isEvent = entry.tags.includes('event')
+            const isGame = entry.tags.includes('game')
             const isUnfinishedTask = entry.tags.includes('task') && !entry.done
-            if (isEvent || isUnfinishedTask) {
+            if (isEvent || isUnfinishedTask || isGame) {
                 relevant.push({ entry, dayId })
             }
         }
@@ -59,12 +60,11 @@ export default function MonthlyTaskBox({
     const tagColors: Record<string, string> = {
         event: '#0ea5e9',
         task: '#8b5cf6',
+        game: '#00653e'
     }
 
     return (
         <section style={{ display: 'grid', gap: '0.75rem' }}>
-            <h3 style={{ margin: 0 }}>This Month</h3>
-
             {relevant.length === 0 ? (
                 <p style={{ margin: 0, color: 'var(--muted)', fontSize: '0.92rem' }}>
                     No events or tasks this month.
@@ -76,6 +76,7 @@ export default function MonthlyTaskBox({
                         const dateLabel = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
                         const isEvent = entry.tags.includes('event')
                         const isTask = entry.tags.includes('task')
+                        const isGame = entry.tags.includes('game')
 
                         return (
                             <li
@@ -112,6 +113,9 @@ export default function MonthlyTaskBox({
                                                     {/* TODO: this doesn't change once it's set */}
                                                     {entry.movedTo === 'day' ? 'IN TODAY' : entry.movedTo === 'week' ? 'IN WEEK' : 'TASK'}
                                                 </span>
+                                            )}
+                                            {isGame && (
+                                                <span style={{ color: tagColors.game, fontWeight: 600, fontSize: '0.75rem' }}>GAME</span>
                                             )}
                                         </span>
                                         <span style={{
