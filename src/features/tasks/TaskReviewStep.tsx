@@ -33,7 +33,7 @@ type Props = {
     isStandalone?: boolean
 }
 
-type YesterdayDecision = 'today' | 'week' | 'month' | 'dismiss' | null
+type YesterdayState = 'today' | 'week' | 'month' | 'dismiss' | null
 type PullState = 'idle' | 'day' | 'week'
 
 export default function TaskReviewStep({
@@ -51,30 +51,33 @@ export default function TaskReviewStep({
     onDone,
     isStandalone = false,
 }: Props) {
-    const [decisions, setDecisions] = useState<Record<string, YesterdayDecision>>({})
-    // Track pull state for weekly tasks and month entries so we can show feedback
+    // Track live state for yesterday's tasks (replaces deferred decisions)
+    const [yesterdayMoved, setYesterdayMoved] = useState<Record<string, YesterdayState>>({})
+    // Track pull state for weekly tasks and month entries
     const [weekPulled, setWeekPulled] = useState<Record<string, PullState>>({})
     const [entryPulled, setEntryPulled] = useState<Record<string, PullState>>({})
 
-    const allYesterdayDecided = yesterdayTasks.every(t => decisions[t.id] != null)
+    const allYesterdayDecided = yesterdayTasks.every(t => yesterdayMoved[t.id] != null)
 
-    function setDecision(taskId: string, decision: YesterdayDecision) {
-        setDecisions(prev => ({ ...prev, [taskId]: decision }))
+    // Immediate handlers for yesterday's tasks — fire the action right away
+    function handleYesterdayToToday(task: Task) {
+        onKeepToday(task)
+        setYesterdayMoved(prev => ({ ...prev, [task.id]: 'today' }))
     }
 
-    function applyDecision(task: Task, decision: YesterdayDecision) {
-        if (decision === 'today') onKeepToday(task)
-        else if (decision === 'week') onPushToWeek(task)
-        else if (decision === 'month') onPushToMonth(task, getDayId(new Date()))
-        // 'dismiss' = do nothing
+    function handleYesterdayToWeek(task: Task) {
+        onPushToWeek(task)
+        setYesterdayMoved(prev => ({ ...prev, [task.id]: 'week' }))
     }
 
-    function handleComplete() {
-        for (const task of yesterdayTasks) {
-            const d = decisions[task.id]
-            if (d) applyDecision(task, d)
-        }
-        onDone()
+    function handleYesterdayToMonth(task: Task) {
+        onPushToMonth(task, getDayId(new Date()))
+        setYesterdayMoved(prev => ({ ...prev, [task.id]: 'month' }))
+    }
+
+    function handleYesterdayDismiss(task: Task) {
+        // No data action — just mark it as decided
+        setYesterdayMoved(prev => ({ ...prev, [task.id]: 'dismiss' }))
     }
 
     function handlePullWeekToDay(task: Task) {
@@ -90,29 +93,6 @@ export default function TaskReviewStep({
     function handlePullEntryToWeek(entry: CalendarEntry, fromDayId: string) {
         onPullEntryToWeek(entry, fromDayId)
         setEntryPulled(prev => ({ ...prev, [entry.id]: 'week' }))
-    }
-
-    const decisionBtn = (taskId: string, value: YesterdayDecision, label: string, color: string) => {
-        const selected = decisions[taskId] === value
-        return (
-            <button
-                key={value}
-                onClick={() => setDecision(taskId, value)}
-                style={{
-                    padding: '0.3rem 0.65rem',
-                    borderRadius: 8,
-                    border: `1px solid ${selected ? color : '#d1d5db'}`,
-                    background: selected ? color : 'white',
-                    color: selected ? 'white' : 'var(--muted)',
-                    cursor: 'pointer',
-                    fontSize: '0.8rem',
-                    fontWeight: selected ? 600 : 400,
-                    transition: 'all 0.1s',
-                }}
-            >
-                {label}
-            </button>
-        )
     }
 
     const sectionTitle: React.CSSProperties = {
@@ -139,6 +119,43 @@ export default function TaskReviewStep({
 
     const openWeekTasks = weeklyTasks.filter(t => !t.done)
     const yesterdayLabel = new Date(`${yesterdayDayId}T12:00:00`).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })
+
+    // Badge shown after a yesterday task is acted on
+    const movedBadge = (dest: YesterdayState) => {
+        if (!dest || dest === 'dismiss') return (
+            <span style={{
+                padding: '0.25rem 0.6rem',
+                borderRadius: 8,
+                background: '#f3f4f6',
+                border: '1px solid #d1d5db',
+                color: 'var(--muted)',
+                fontSize: '0.78rem',
+                fontWeight: 600,
+                whiteSpace: 'nowrap',
+            }}>
+                ✓ Released
+            </span>
+        )
+        const labels: Record<string, string> = {
+            today: 'Added to today',
+            week: 'Added to this week',
+            month: 'Added to month',
+        }
+        return (
+            <span style={{
+                padding: '0.25rem 0.6rem',
+                borderRadius: 8,
+                background: '#d1fae5',
+                border: '1px solid #10b981',
+                color: '#065f46',
+                fontSize: '0.78rem',
+                fontWeight: 600,
+                whiteSpace: 'nowrap',
+            }}>
+                ✓ {labels[dest]}
+            </span>
+        )
+    }
 
     const pulledBadge = (dest: 'day' | 'week') => (
         <span style={{
@@ -169,23 +186,60 @@ export default function TaskReviewStep({
                     </p>
                 </div>
 
-                {/* Section 1: Yesterday's incomplete tasks (required) */}
+                {/* Section 1: Yesterday's incomplete tasks */}
                 {yesterdayTasks.length > 0 && (
                     <div>
                         <p style={sectionTitle}>From yesterday ({yesterdayLabel})</p>
                         <p style={sectionSubtitle}>What do you want to do with these?</p>
                         <div style={{ display: 'grid', gap: '0.6rem' }}>
-                            {yesterdayTasks.map(task => (
-                                <div key={task.id} style={card}>
-                                    <span style={{ fontSize: '0.95rem', fontWeight: 500 }}>{task.title}</span>
-                                    <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
-                                        {decisionBtn(task.id, 'today', '→ Today', '#2c454d')}
-                                        {decisionBtn(task.id, 'week', '→ This Week', '#6366f1')}
-                                        {decisionBtn(task.id, 'month', '→ Month', '#0ea5e9')}
-                                        {decisionBtn(task.id, 'dismiss', 'Let it go', '#9ca3af')}
+                            {yesterdayTasks.map(task => {
+                                const moved = yesterdayMoved[task.id]
+                                return (
+                                    <div key={task.id} style={{
+                                        ...card,
+                                        gridTemplateColumns: moved ? '1fr auto' : undefined,
+                                        alignItems: moved ? 'center' : undefined,
+                                        background: moved ? (moved === 'dismiss' ? '#f9fafb' : '#f0fdf4') : 'white',
+                                        borderColor: moved ? (moved === 'dismiss' ? '#d1d5db' : '#10b981') : '#d1d5db',
+                                    }}>
+                                        <span style={{
+                                            fontSize: '0.95rem',
+                                            fontWeight: 500,
+                                            color: moved ? 'var(--muted)' : 'var(--text)',
+                                        }}>
+                                            {task.title}
+                                        </span>
+                                        {moved ? movedBadge(moved) : (
+                                            <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                                                <button
+                                                    onClick={() => handleYesterdayToToday(task)}
+                                                    style={actionBtn('#2c454d')}
+                                                >
+                                                    → Today
+                                                </button>
+                                                <button
+                                                    onClick={() => handleYesterdayToWeek(task)}
+                                                    style={actionBtn('#6366f1')}
+                                                >
+                                                    → This Week
+                                                </button>
+                                                <button
+                                                    onClick={() => handleYesterdayToMonth(task)}
+                                                    style={actionBtn('#0ea5e9')}
+                                                >
+                                                    → Month
+                                                </button>
+                                                <button
+                                                    onClick={() => handleYesterdayDismiss(task)}
+                                                    style={actionBtn('#9ca3af')}
+                                                >
+                                                    Let it go
+                                                </button>
+                                            </div>
+                                        )}
                                     </div>
-                                </div>
-                            ))}
+                                )
+                            })}
                         </div>
                     </div>
                 )}
@@ -309,7 +363,7 @@ export default function TaskReviewStep({
 
                 <div style={{ display: 'grid', gap: '0.5rem' }}>
                     <button
-                        onClick={handleComplete}
+                        onClick={onDone}
                         disabled={yesterdayTasks.length > 0 && !allYesterdayDecided}
                         style={{
                             padding: '0.75rem 1.5rem',
@@ -383,4 +437,19 @@ export default function TaskReviewStep({
 
         </div>
     )
+}
+
+// Extracted button style helper to keep the JSX clean
+function actionBtn(color: string): React.CSSProperties {
+    return {
+        padding: '0.3rem 0.65rem',
+        borderRadius: 8,
+        border: `1px solid ${color}`,
+        background: 'white',
+        color: color,
+        cursor: 'pointer',
+        fontSize: '0.8rem',
+        fontWeight: 400,
+        transition: 'all 0.1s',
+    }
 }

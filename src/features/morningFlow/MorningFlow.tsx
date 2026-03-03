@@ -93,7 +93,7 @@ export default function MorningFlow() {
     const todaysNote = notesByDay[dayId] ?? ''
     const todaysJournal = journalByDay[dayId] ?? ''
     const todaysChat: ChatMessage[] = chatsByDay[dayId] ?? []
-    const todaysTracker: DayTracker = trackersByDay[dayId] ?? { period: false, symptoms: [], medications: [] }
+    const todaysTracker: DayTracker = trackersByDay[dayId] ?? { period: false, symptoms: [], medications: false }
 
     const weeklyTheme = weeks[weekId]?.theme ?? ''
     const weeklyTasks = weeks[weekId]?.weeklyTasks ?? []

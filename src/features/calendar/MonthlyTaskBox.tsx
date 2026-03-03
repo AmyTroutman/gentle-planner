@@ -32,6 +32,7 @@ export default function MonthlyTaskBox({
     const relevant: EntryWithDay[] = []
 
     for (const dayId of monthDayIds) {
+        if (dayId < todayDayId) continue 
         const entries = calendarEntriesByDay[dayId] ?? []
         for (const entry of entries) {
             const isEvent = entry.tags.includes('event')
