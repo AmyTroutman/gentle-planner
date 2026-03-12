@@ -1,28 +1,34 @@
 import { useEffect, useMemo, useState } from 'react'
-import { getWeekId, getPreviousWeekId } from '../../lib/dates'
+import { getWeekId, getPreviousWeekId, getDayId } from '../../lib/dates'
 import type { WeeksMap } from '../morningFlow/morningFlow.types'
 import type { WeeklyResetStep, WeeklyResetData, WeeklyResetTaskDecision } from './weeklyReset.types'
-import IntroStep from './steps/IntroStep'
-import LookbackStep from './steps/LookbackStep'
-import TasksStep from './steps/TasksStep'
-import ThemeStep from './steps/ThemeStep'
-import CompleteStep from './steps/CompleteStep'
 import type { Task } from '../tasks/tasks.types'
+import type { ChatMessage } from '../journal/journal.types'
+import WrenSidebar from './WrenSidebar'
+
+// ─── Step UI components (kept for confirm panels) ───────────────────────────
+import TasksStep from './steps/TasksStep'
+
+// ─── Helper types ────────────────────────────────────────────────────────────
 
 type Props = {
     weeks: WeeksMap
     setWeeks: (updater: WeeksMap | ((prev: WeeksMap) => WeeksMap)) => void
     onClose: () => void
+    // Context passed from MorningFlow for Wren
+    journalByDay: Record<string, string>
+    chatsByDay: Record<string, ChatMessage[]>
 }
 
+// ─── Firestore helpers ───────────────────────────────────────────────────────
+
 function createDefaultWeeklyReset(): WeeklyResetData {
-    return { completed: false, lookback: {}, taskDecisions: {} }
+    return { completed: false, lookback: {}, taskDecisions: {}, wrenChat: [] }
 }
 
 function normalizeWeeklyReset(raw: unknown): WeeklyResetData {
     const base = createDefaultWeeklyReset()
     const r = (raw ?? {}) as Partial<WeeklyResetData>
-
     return {
         ...base,
         completed: r.completed ?? base.completed,
@@ -34,38 +40,28 @@ function normalizeWeeklyReset(raw: unknown): WeeklyResetData {
         inspiration: r.inspiration,
         behavior: r.behavior,
         taskDecisions: r.taskDecisions ?? base.taskDecisions,
+        wrenChat: r.wrenChat ?? [],
     }
 }
 
 function ensureWeekHasWeeklyReset<TWeek extends Record<string, any>>(existing: TWeek): TWeek {
-    return {
-        ...existing,
-        weeklyReset: normalizeWeeklyReset(existing.weeklyReset),
-    }
+    return { ...existing, weeklyReset: normalizeWeeklyReset(existing.weeklyReset) }
 }
 
 function markWeeklyResetStarted(prev: WeeksMap, weekId: string): WeeksMap {
     const week = prev[weekId]
     if (!week) return prev
-
     const merged = ensureWeekHasWeeklyReset(week as any) as any
     const reset: WeeklyResetData = merged.weeklyReset
-
     if (reset.startedAt) return prev
-
-    return {
-        ...prev,
-        [weekId]: { ...merged, weeklyReset: { ...reset, startedAt: new Date().toISOString() } },
-    }
+    return { ...prev, [weekId]: { ...merged, weeklyReset: { ...reset, startedAt: new Date().toISOString() } } }
 }
 
 function markWeeklyResetCompleted(prev: WeeksMap, weekId: string, skipped: boolean): WeeksMap {
     const week = prev[weekId]
     if (!week) return prev
-
     const merged = ensureWeekHasWeeklyReset(week as any) as any
     const reset: WeeklyResetData = merged.weeklyReset
-
     return {
         ...prev,
         [weekId]: {
@@ -80,59 +76,28 @@ function markWeeklyResetCompleted(prev: WeeksMap, weekId: string, skipped: boole
     }
 }
 
-function updateLookback(
-    prev: WeeksMap,
-    weekId: string,
-    patch: { meaningful?: string; askedALot?: string }
-): WeeksMap {
+function updateLookback(prev: WeeksMap, weekId: string, patch: { meaningful?: string; askedALot?: string }): WeeksMap {
     const week = prev[weekId]
     if (!week) return prev
-
     const merged = ensureWeekHasWeeklyReset(week as any) as any
     const reset: WeeklyResetData = merged.weeklyReset
-
-    return {
-        ...prev,
-        [weekId]: { ...merged, weeklyReset: { ...reset, lookback: { ...reset.lookback, ...patch } } },
-    }
+    return { ...prev, [weekId]: { ...merged, weeklyReset: { ...reset, lookback: { ...reset.lookback, ...patch } } } }
 }
 
-function updateTaskDecision(
-    prev: WeeksMap,
-    weekId: string,
-    taskId: string,
-    decision: WeeklyResetTaskDecision
-): WeeksMap {
+function updateTaskDecision(prev: WeeksMap, weekId: string, taskId: string, decision: WeeklyResetTaskDecision): WeeksMap {
     const week = prev[weekId]
     if (!week) return prev
-
     const merged = ensureWeekHasWeeklyReset(week as any) as any
     const reset: WeeklyResetData = merged.weeklyReset
-
-    return {
-        ...prev,
-        [weekId]: {
-            ...merged,
-            weeklyReset: {
-                ...reset,
-                taskDecisions: { ...reset.taskDecisions, [taskId]: decision },
-            },
-        },
-    }
+    return { ...prev, [weekId]: { ...merged, weeklyReset: { ...reset, taskDecisions: { ...reset.taskDecisions, [taskId]: decision } } } }
 }
 
-function updateThemeFields(
-    prev: WeeksMap,
-    weekId: string,
-    patch: { pausePrompt?: string; theme?: string; inspiration?: string; behavior?: string }
-): WeeksMap {
+function updateThemeFields(prev: WeeksMap, weekId: string, patch: { pausePrompt?: string; theme?: string; inspiration?: string; behavior?: string }): WeeksMap {
     const week = prev[weekId]
     if (!week) return prev
-
     const merged = ensureWeekHasWeeklyReset(week as any) as any
     const reset: WeeklyResetData = merged.weeklyReset
     const { theme, ...resetPatch } = patch
-
     return {
         ...prev,
         [weekId]: {
@@ -143,35 +108,171 @@ function updateThemeFields(
     }
 }
 
-export default function WeeklyResetFlow({ weeks, setWeeks, onClose }: Props) {
+function updateWrenChat(prev: WeeksMap, weekId: string, messages: ChatMessage[]): WeeksMap {
+    const week = prev[weekId]
+    if (!week) return prev
+    const merged = ensureWeekHasWeeklyReset(week as any) as any
+    const reset: WeeklyResetData = merged.weeklyReset
+    return { ...prev, [weekId]: { ...merged, weeklyReset: { ...reset, wrenChat: messages } } }
+}
+
+// ─── Step metadata ────────────────────────────────────────────────────────────
+
+const STEP_LABELS: Record<WeeklyResetStep, string> = {
+    intro: 'Opening',
+    lookback: 'Looking back',
+    tasks: 'Tasks',
+    theme: 'Theme',
+    complete: 'Done',
+}
+
+// ─── Dot progress ────────────────────────────────────────────────────────────
+
+function StepDots({ current }: { current: WeeklyResetStep }) {
+    const steps: WeeklyResetStep[] = ['lookback', 'tasks', 'theme']
+    return (
+        <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+            {steps.map((s) => {
+                const idx = steps.indexOf(s)
+                const curIdx = steps.indexOf(current)
+                const done = curIdx > idx
+                const active = s === current
+                return (
+                    <div
+                        key={s}
+                        title={STEP_LABELS[s]}
+                        style={{
+                            width: active ? 20 : 7,
+                            height: 7,
+                            borderRadius: 4,
+                            background: done ? '#2c454d' : active ? '#2c454d' : '#d1d5db',
+                            opacity: done ? 0.4 : 1,
+                            transition: 'all 0.25s ease',
+                        }}
+                    />
+                )
+            })}
+        </div>
+    )
+}
+
+// ─── Confirm panel ────────────────────────────────────────────────────────────
+
+function ConfirmPanel({ title, children, open, onToggle }: {
+    title: string
+    children: React.ReactNode
+    open: boolean
+    onToggle: () => void
+}) {
+    return (
+        <div style={{
+            borderRadius: 12,
+            border: '1px solid #e5e7eb',
+            background: 'white',
+            overflow: 'hidden',
+        }}>
+            <button
+                onClick={onToggle}
+                style={{
+                    width: '100%',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    padding: '0.65rem 0.9rem',
+                    background: 'transparent',
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontSize: '0.85rem',
+                    color: 'var(--muted)',
+                    fontFamily: 'inherit',
+                }}
+            >
+                <span>{title}</span>
+                <span style={{ fontSize: '0.7rem' }}>{open ? '▲' : '▼'}</span>
+            </button>
+            {open && (
+                <div style={{ padding: '0 0.9rem 0.9rem', borderTop: '1px solid #f3f4f6' }}>
+                    {children}
+                </div>
+            )}
+        </div>
+    )
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
+
+export default function WeeklyResetFlow({ weeks, setWeeks, onClose, journalByDay, chatsByDay }: Props) {
     const weekId = useMemo(() => getWeekId(new Date()), [])
     const prevWeekId = useMemo(() => getPreviousWeekId(new Date()), [])
 
     const week = weeks[weekId]
-    const weeklyReset = week
-        ? (ensureWeekHasWeeklyReset(week as any) as any).weeklyReset
-        : undefined
+    const weeklyReset = week ? (ensureWeekHasWeeklyReset(week as any) as any).weeklyReset as WeeklyResetData : undefined
 
     const prevWeek = weeks[prevWeekId]
     const prevWeeklyTasks = ((prevWeek as any)?.weeklyTasks ?? []) as Task[]
+    const prevWeekTheme = (prevWeek as any)?.theme as string | undefined
 
     const [step, setStep] = useState<WeeklyResetStep>('intro')
+    const [pendingNext, setPendingNext] = useState(false)
 
+    // Confirm panel open states
+    const [lookbackOpen, setLookbackOpen] = useState(false)
+    const [themeOpen, setThemeOpen] = useState(false)
+
+    // Wren chat messages (persisted to Firestore)
+    const wrenChat: ChatMessage[] = weeklyReset?.wrenChat ?? []
+
+    function setWrenChat(messages: ChatMessage[]) {
+        setWeeks((prev) => updateWrenChat(prev, weekId, messages))
+    }
+
+    // Ensure week doc has weeklyReset initialized
     useEffect(() => {
         if (!week) return
         setWeeks((prev) => {
             const existing = prev[weekId]
             if (!existing) return prev
-
             const merged = ensureWeekHasWeeklyReset(existing as any)
-            const before = (existing as any).weeklyReset
-            const after = (merged as any).weeklyReset
-            const changed = JSON.stringify(before) !== JSON.stringify(after)
-
+            const changed = JSON.stringify((existing as any).weeklyReset) !== JSON.stringify((merged as any).weeklyReset)
             if (!changed) return prev
             return { ...prev, [weekId]: merged }
         })
     }, [weekId, week, setWeeks])
+
+    // Build week's day IDs for pulling journal/chat context
+    const prevWeekDayIds = useMemo(() => {
+        const [year, month, day] = prevWeekId.split('-').map(Number)
+        const ids: string[] = []
+        for (let i = 0; i < 7; i++) {
+            const d = new Date(year, month - 1, day + i)
+            ids.push(getDayId(d))
+        }
+        return ids
+    }, [prevWeekId])
+
+    // Gather context for Wren
+    const wrenContext = useMemo(() => {
+        const reflections = (prevWeek as any)?.reflections ?? []
+        const reflectionTexts: string[] = reflections.map((r: { text: string }) => r.text).filter(Boolean)
+
+        const journalTexts: string[] = prevWeekDayIds
+            .map((id) => journalByDay[id])
+            .filter(Boolean) as string[]
+
+        const chatTexts: string[] = prevWeekDayIds
+            .flatMap((id) => (chatsByDay[id] ?? []).map((m: ChatMessage) => m.content))
+            .filter(Boolean)
+
+        return {
+            currentStep: step,
+            prevWeekTheme,
+            reflections: reflectionTexts,
+            journalEntries: journalTexts,
+            chatMessages: chatTexts,
+            prevWeeklyTasks: prevWeeklyTasks.map((t) => ({ title: t.title, done: t.done })),
+            lookback: weeklyReset?.lookback,
+        }
+    }, [step, prevWeek, prevWeekDayIds, journalByDay, chatsByDay, prevWeekTheme, prevWeeklyTasks, weeklyReset?.lookback])
 
     function begin() {
         setWeeks((prev) => markWeeklyResetStarted(prev, weekId))
@@ -183,7 +284,17 @@ export default function WeeklyResetFlow({ weeks, setWeeks, onClose }: Props) {
         onClose()
     }
 
+    function advanceStep() {
+        setPendingNext(false)
+        if (step === 'intro') { begin(); return }
+        if (step === 'lookback') { setStep('tasks'); return }
+        if (step === 'tasks') { setStep('theme'); return }
+        if (step === 'theme') { finish(); return }
+        if (step === 'complete') { onClose(); return }
+    }
+
     function skipThisStep() {
+        setPendingNext(false)
         if (step === 'intro') return onClose()
         if (step === 'lookback') return setStep('tasks')
         if (step === 'tasks') return setStep('theme')
@@ -197,7 +308,7 @@ export default function WeeklyResetFlow({ weeks, setWeeks, onClose }: Props) {
 
     if (!week) {
         return (
-            <section>
+            <section style={{ padding: '2rem' }}>
                 <p style={{ color: 'var(--muted)' }}>Week data not ready yet.</p>
             </section>
         )
@@ -205,78 +316,210 @@ export default function WeeklyResetFlow({ weeks, setWeeks, onClose }: Props) {
 
     const r = weeklyReset ?? createDefaultWeeklyReset()
 
+    const showDots = step !== 'intro' && step !== 'complete'
+
     return (
-        <section style={{ display: 'grid', gap: '1.25rem' }}>
-            {step === 'intro' && (
-                <IntroStep onBegin={begin} onLater={onClose} onSkipWeek={skipWeek} />
-            )}
+        <div style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr 340px',
+            gap: '1.5rem',
+            height: 'calc(100vh - 8rem)',
+            maxHeight: 780,
+            minHeight: 480,
+        }}>
+            {/* ── Left: reset content ───────────────────────────── */}
+            <div style={{
+                display: 'grid',
+                gridTemplateRows: 'auto 1fr auto',
+                gap: '1rem',
+                minHeight: 0,
+                overflowY: 'auto',
+            }}>
+                {/* Header */}
+                <header style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    paddingBottom: '0.5rem',
+                    borderBottom: '1px solid #f3f4f6',
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                        <h2 style={{ margin: 0, fontSize: '1.15rem', color: '#2c454d' }}>Weekly Reset</h2>
+                        {showDots && <StepDots current={step} />}
+                    </div>
+                    <button
+                        onClick={onClose}
+                        style={{
+                            background: 'transparent',
+                            border: 'none',
+                            color: 'var(--muted)',
+                            cursor: 'pointer',
+                            fontSize: '0.85rem',
+                        }}
+                    >
+                        Close
+                    </button>
+                </header>
 
-            {step === 'lookback' && (
-                <LookbackStep
-                    meaningful={r.lookback.meaningful}
-                    askedALot={r.lookback.askedALot}
-                    onSave={(meaningful, askedALot) => {
-                        setWeeks((prev) => updateLookback(prev, weekId, { meaningful, askedALot }))
-                    }}
-                    onNext={() => setStep('tasks')}
-                    onSkip={skipThisStep}
-                />
-            )}
+                {/* Step content */}
+                <div style={{ minHeight: 0, overflowY: 'auto', display: 'grid', gap: '1rem', alignContent: 'start' }}>
 
-            {step === 'tasks' && (
-                <TasksStep
-                    tasks={prevWeeklyTasks}
-                    taskDecisions={r.taskDecisions}
-                    onDecide={(taskId, decision) => {
-                        setWeeks((prev) => updateTaskDecision(prev, weekId, taskId, decision))
+                    {step === 'intro' && (
+                        <div style={{ display: 'grid', gap: '1rem', paddingTop: '1rem' }}>
+                            <p style={{ margin: 0, color: 'var(--muted)', fontSize: '0.95rem', lineHeight: 1.6 }}>
+                                Wren will guide you through your reset. Take your time — everything here is skippable.
+                            </p>
+                            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                                <button onClick={begin} style={{ padding: '0.65rem 1.1rem', borderRadius: 10, border: '1px solid #2c454d', background: '#2c454d', color: 'white', cursor: 'pointer', fontSize: '0.9rem' }}>
+                                    Begin
+                                </button>
+                                <button onClick={skipWeek} style={{ padding: '0.65rem 1.1rem', borderRadius: 10, border: '1px solid #d1d5db', background: 'transparent', color: 'var(--muted)', cursor: 'pointer', fontSize: '0.9rem' }}>
+                                    Skip this week
+                                </button>
+                            </div>
+                        </div>
+                    )}
 
-                        if (decision === 'carry') {
-                            const t = prevWeeklyTasks.find((x) => x.id === taskId)
-                            if (!t) return
-                            
-                            const newTask: Task = {
-                                id: crypto.randomUUID(),
-                                title: t.title,
-                                done: false,
-                                createdAt: new Date().toISOString(),
-                                subtasks: t.subtasks?.map((s) => ({
-                                    ...s,
-                                    id: crypto.randomUUID(),
-                                    done: false,
-                                })),
-                            }
+                    {step === 'lookback' && (
+                        <div style={{ display: 'grid', gap: '0.75rem' }}>
+                            <p style={{ margin: 0, color: 'var(--muted)', fontSize: '0.9rem' }}>
+                                Talk with Wren about how last week felt. When you're ready, she'll help you move on.
+                            </p>
+                            <ConfirmPanel
+                                title="Save lookback notes (optional)"
+                                open={lookbackOpen}
+                                onToggle={() => setLookbackOpen((o) => !o)}
+                            >
+                                <div style={{ display: 'grid', gap: '0.75rem', paddingTop: '0.75rem' }}>
+                                    <label style={{ display: 'grid', gap: '0.3rem', fontSize: '0.88rem', color: '#374151' }}>
+                                        What felt meaningful?
+                                        <textarea
+                                            rows={2}
+                                            value={r.lookback.meaningful ?? ''}
+                                            onChange={(e) => setWeeks((prev) => updateLookback(prev, weekId, { meaningful: e.target.value }))}
+                                            style={{ borderRadius: 8, border: '1px solid #d1d5db', padding: '0.5rem', fontFamily: 'inherit', fontSize: '0.88rem', resize: 'vertical' }}
+                                        />
+                                    </label>
+                                    <label style={{ display: 'grid', gap: '0.3rem', fontSize: '0.88rem', color: '#374151' }}>
+                                        What asked a lot of you?
+                                        <textarea
+                                            rows={2}
+                                            value={r.lookback.askedALot ?? ''}
+                                            onChange={(e) => setWeeks((prev) => updateLookback(prev, weekId, { askedALot: e.target.value }))}
+                                            style={{ borderRadius: 8, border: '1px solid #d1d5db', padding: '0.5rem', fontFamily: 'inherit', fontSize: '0.88rem', resize: 'vertical' }}
+                                        />
+                                    </label>
+                                </div>
+                            </ConfirmPanel>
+                            <button onClick={skipThisStep} style={{ alignSelf: 'start', background: 'transparent', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: '0.82rem', padding: 0 }}>
+                                Skip →
+                            </button>
+                        </div>
+                    )}
 
-                            setWeeks((prev) => {
-                                const w = prev[weekId]
-                                if (!w) return prev
-                                return {
-                                    ...prev,
-                                    [weekId]: {
-                                        ...(w as any),
-                                        weeklyTasks: [newTask, ...((w as any).weeklyTasks ?? [])],
-                                    },
-                                }
-                            })
-                        }
-                    }}
-                    onNext={() => setStep('theme')}
-                    onSkip={skipThisStep}
-                />
-            )}
+                    {step === 'tasks' && (
+                        <div style={{ display: 'grid', gap: '0.75rem' }}>
+                            <p style={{ margin: 0, color: 'var(--muted)', fontSize: '0.9rem' }}>
+                                Talk through your tasks with Wren — carry forward what still matters, let go of what doesn't.
+                            </p>
+                            <TasksStep
+                                tasks={prevWeeklyTasks}
+                                taskDecisions={r.taskDecisions}
+                                onDecide={(taskId, decision) => {
+                                    setWeeks((prev) => updateTaskDecision(prev, weekId, taskId, decision))
+                                    if (decision === 'carry') {
+                                        const t = prevWeeklyTasks.find((x) => x.id === taskId)
+                                        if (!t) return
+                                        const newTask: Task = {
+                                            id: crypto.randomUUID(),
+                                            title: t.title,
+                                            done: false,
+                                            createdAt: new Date().toISOString(),
+                                            subtasks: t.subtasks?.map((s) => ({ ...s, id: crypto.randomUUID(), done: false })),
+                                        }
+                                        setWeeks((prev) => {
+                                            const w = prev[weekId]
+                                            if (!w) return prev
+                                            return { ...prev, [weekId]: { ...(w as any), weeklyTasks: [newTask, ...((w as any).weeklyTasks ?? [])] } }
+                                        })
+                                    }
+                                }}
+                                onNext={() => setStep('theme')}
+                                onSkip={skipThisStep}
+                            />
+                        </div>
+                    )}
 
-            {step === 'theme' && (
-                <ThemeStep
-                    pausePrompt={r.pausePrompt}
-                    theme={(week as any).theme}
-                    inspiration={r.inspiration}
-                    behavior={r.behavior}
-                    onSave={(patch) => setWeeks((prev) => updateThemeFields(prev, weekId, patch))}
-                    onNext={finish}
-                    onSkip={skipThisStep}
-                />
-            )}
+                    {step === 'theme' && (
+                        <div style={{ display: 'grid', gap: '0.75rem' }}>
+                            <p style={{ margin: 0, color: 'var(--muted)', fontSize: '0.9rem' }}>
+                                Wren will help you find a theme for the week. She'll also offer some affirmations once you land on one.
+                            </p>
+                            <ConfirmPanel
+                                title="Save theme details (optional)"
+                                open={themeOpen}
+                                onToggle={() => setThemeOpen((o) => !o)}
+                            >
+                                <div style={{ display: 'grid', gap: '0.75rem', paddingTop: '0.75rem' }}>
+                                    <label style={{ display: 'grid', gap: '0.3rem', fontSize: '0.88rem', color: '#374151' }}>
+                                        Theme
+                                        <input
+                                            value={(week as any).theme ?? ''}
+                                            onChange={(e) => setWeeks((prev) => updateThemeFields(prev, weekId, { theme: e.target.value }))}
+                                            style={{ borderRadius: 8, border: '1px solid #d1d5db', padding: '0.5rem', fontFamily: 'inherit', fontSize: '0.88rem' }}
+                                        />
+                                    </label>
+                                    <label style={{ display: 'grid', gap: '0.3rem', fontSize: '0.88rem', color: '#374151' }}>
+                                        What pointed you here?
+                                        <textarea
+                                            rows={2}
+                                            value={r.pausePrompt ?? ''}
+                                            onChange={(e) => setWeeks((prev) => updateThemeFields(prev, weekId, { pausePrompt: e.target.value }))}
+                                            style={{ borderRadius: 8, border: '1px solid #d1d5db', padding: '0.5rem', fontFamily: 'inherit', fontSize: '0.88rem', resize: 'vertical' }}
+                                        />
+                                    </label>
+                                    <label style={{ display: 'grid', gap: '0.3rem', fontSize: '0.88rem', color: '#374151' }}>
+                                        One small way to live it
+                                        <input
+                                            value={r.behavior ?? ''}
+                                            onChange={(e) => setWeeks((prev) => updateThemeFields(prev, weekId, { behavior: e.target.value }))}
+                                            style={{ borderRadius: 8, border: '1px solid #d1d5db', padding: '0.5rem', fontFamily: 'inherit', fontSize: '0.88rem' }}
+                                        />
+                                    </label>
+                                </div>
+                            </ConfirmPanel>
+                            <button onClick={skipThisStep} style={{ alignSelf: 'start', background: 'transparent', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: '0.82rem', padding: 0 }}>
+                                Skip →
+                            </button>
+                        </div>
+                    )}
 
-            {step === 'complete' && <CompleteStep onDone={onClose} />}
-        </section>
+                    {step === 'complete' && (
+                        <div style={{ display: 'grid', gap: '1rem', paddingTop: '1rem' }}>
+                            <p style={{ margin: 0, color: '#374151', fontSize: '0.95rem', lineHeight: 1.6 }}>
+                                You've closed out the week. Whatever comes next, you've taken a moment to look at it clearly.
+                            </p>
+                            <button
+                                onClick={onClose}
+                                style={{ alignSelf: 'start', padding: '0.65rem 1.1rem', borderRadius: 10, border: '1px solid #2c454d', background: '#2c454d', color: 'white', cursor: 'pointer', fontSize: '0.9rem' }}
+                            >
+                                Done
+                            </button>
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* ── Right: Wren sidebar ───────────────────────────── */}
+            <WrenSidebar
+                messages={wrenChat}
+                onMessagesChange={setWrenChat}
+                context={wrenContext}
+                onSuggestNext={() => setPendingNext(true)}
+                onConfirmNext={advanceStep}
+                pendingNext={pendingNext}
+                stepLabel={STEP_LABELS[step]}
+            />
+        </div>
     )
 }

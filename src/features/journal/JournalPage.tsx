@@ -39,7 +39,7 @@ export default function JournalPage({
     const tabs: { id: Tab; label: string }[] = [
         { id: 'reflection', label: 'Reflection' },
         { id: 'journal', label: 'Journal' },
-        { id: 'chat', label: 'Chat' },
+        { id: 'chat', label: 'Wren' },
     ]
 
     return (

@@ -72,12 +72,14 @@ export default function MorningFlow() {
 
     useEffect(() => {
         if (loading || stepInitialized) return
-        if (!weekHasTheme) {
-            setStep('weeklyThemeSetup')
-        } else if (hasCompletedMorningFlow) {
+        if (hasCompletedMorningFlow) {
             setStep('tasks')
         } else {
             setStep('greeting')
+        }
+        // Open weekly reset automatically if no theme yet
+        if (!weekHasTheme) {
+            setIsWeeklyResetOpen(true)
         }
         setStepInitialized(true)
     }, [loading, stepInitialized, weekHasTheme, hasCompletedMorningFlow])
@@ -131,13 +133,6 @@ export default function MorningFlow() {
             }
         })
     }, [weekId, setWeeks, loading])
-
-    useEffect(() => {
-        if (loading) return
-        if (!weekHasTheme && stepInitialized && step !== 'weeklyThemeSetup') {
-            setStep('weeklyThemeSetup')
-        }
-    }, [weekHasTheme, step, stepInitialized, loading])
 
     useEffect(() => {
         if (loading) return
@@ -704,6 +699,8 @@ export default function MorningFlow() {
                     weeks={weeks}
                     setWeeks={setWeeks}
                     onClose={() => setIsWeeklyResetOpen(false)}
+                    journalByDay={journalByDay}
+                    chatsByDay={chatsByDay}
                 />
             )}
 

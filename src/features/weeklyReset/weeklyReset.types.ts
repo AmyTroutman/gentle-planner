@@ -1,3 +1,5 @@
+import type { ChatMessage } from '../journal/journal.types'
+
 export type WeeklyResetLookback = {
     meaningful?: string
     askedALot?: string
@@ -15,6 +17,7 @@ export type WeeklyResetData = {
     inspiration?: string
     behavior?: string
     taskDecisions: Record<string, WeeklyResetTaskDecision>
+    wrenChat?: ChatMessage[]
 }
 
 export type WeeklyResetStep = 'intro' | 'lookback' | 'tasks' | 'theme' | 'complete'
