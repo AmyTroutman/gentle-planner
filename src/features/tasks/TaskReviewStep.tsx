@@ -3,38 +3,43 @@ import type { Task } from '../tasks/tasks.types'
 import type { CalendarEntry } from '../calendar/calendar.types'
 import { getDayId } from '../../lib/dates'
 
-type Props = {
-    // Yesterday's incomplete day tasks
+// Exported so WeeklyResetFlow (and others) can reference the full prop shape
+export type TaskReviewProps = {
+    // Yesterday's incomplete day tasks (source only — no destination for yesterday)
     yesterdayTasks: Task[]
     yesterdayDayId: string
 
-    // This week's open tasks
+    // Live lists — all mutations happen in parent, these reflect real state
     weeklyTasks: Task[]
-
-    // Today's tasks (for the sidebar view)
     todayTasks: Task[]
-
-    // This month's open task-tagged calendar entries
     monthEntries: Array<{ entry: CalendarEntry; dayId: string }>
 
-    // Actions for yesterday's tasks
-    onKeepToday: (task: Task) => void
-    onPushToWeek: (task: Task) => void
-    onPushToMonth: (task: Task, dayId: string) => void
+    // Yesterday actions (yesterday is never a move destination)
+    onMoveYesterdayToToday: (task: Task) => void
+    onMoveYesterdayToWeek: (task: Task) => void
+    onMoveYesterdayToMonth: (task: Task, dayId: string) => void
+    onDismissYesterday: (task: Task) => void
 
-    // Actions for weekly tasks (moves to today AND removes from week)
-    onPullWeekToDay: (task: Task) => void
+    // Today actions
+    onMoveTodayToWeek: (task: Task) => void
+    onMoveTodayToMonth: (task: Task, dayId: string) => void
 
-    // Actions for monthly entries
-    onPullEntryToDay: (entry: CalendarEntry, fromDayId: string) => void
-    onPullEntryToWeek: (entry: CalendarEntry, fromDayId: string) => void
+    // Week actions
+    onMoveWeekToToday: (task: Task) => void
+    onMoveWeekToMonth: (task: Task, dayId: string) => void
+
+    // Month actions
+    onMoveMonthToToday: (entry: CalendarEntry, fromDayId: string) => void
+    onMoveMonthToWeek: (entry: CalendarEntry, fromDayId: string) => void
 
     onDone: () => void
     isStandalone?: boolean
 }
 
-type YesterdayState = 'today' | 'week' | 'month' | 'dismiss' | null
-type PullState = 'idle' | 'day' | 'week'
+type Props = TaskReviewProps
+
+// Tracks what action was taken on a yesterday task — used only for visual feedback
+type YesterdayAction = 'today' | 'week' | 'month' | 'dismissed'
 
 export default function TaskReviewStep({
     yesterdayTasks,
@@ -42,58 +47,26 @@ export default function TaskReviewStep({
     weeklyTasks,
     todayTasks,
     monthEntries,
-    onKeepToday,
-    onPushToWeek,
-    onPushToMonth,
-    onPullWeekToDay,
-    onPullEntryToDay,
-    onPullEntryToWeek,
+    onMoveYesterdayToToday,
+    onMoveYesterdayToWeek,
+    onMoveYesterdayToMonth,
+    onDismissYesterday,
+    onMoveTodayToWeek,
+    onMoveTodayToMonth,
+    onMoveWeekToToday,
+    onMoveWeekToMonth,
+    onMoveMonthToToday,
+    onMoveMonthToWeek,
     onDone,
     isStandalone = false,
 }: Props) {
-    // Track live state for yesterday's tasks (replaces deferred decisions)
-    const [yesterdayMoved, setYesterdayMoved] = useState<Record<string, YesterdayState>>({})
-    // Track pull state for weekly tasks and month entries
-    const [weekPulled, setWeekPulled] = useState<Record<string, PullState>>({})
-    const [entryPulled, setEntryPulled] = useState<Record<string, PullState>>({})
+    const todayDayId = getDayId(new Date())
 
-    const allYesterdayDecided = yesterdayTasks.every(t => yesterdayMoved[t.id] != null)
+    // Local state only for yesterday tasks — needed for visual feedback since
+    // yesterday's list is read-only (we don't remove from it on action)
+    const [yesterdayActioned, setYesterdayActioned] = useState<Record<string, YesterdayAction>>({})
 
-    // Immediate handlers for yesterday's tasks — fire the action right away
-    function handleYesterdayToToday(task: Task) {
-        onKeepToday(task)
-        setYesterdayMoved(prev => ({ ...prev, [task.id]: 'today' }))
-    }
-
-    function handleYesterdayToWeek(task: Task) {
-        onPushToWeek(task)
-        setYesterdayMoved(prev => ({ ...prev, [task.id]: 'week' }))
-    }
-
-    function handleYesterdayToMonth(task: Task) {
-        onPushToMonth(task, getDayId(new Date()))
-        setYesterdayMoved(prev => ({ ...prev, [task.id]: 'month' }))
-    }
-
-    function handleYesterdayDismiss(task: Task) {
-        // No data action — just mark it as decided
-        setYesterdayMoved(prev => ({ ...prev, [task.id]: 'dismiss' }))
-    }
-
-    function handlePullWeekToDay(task: Task) {
-        onPullWeekToDay(task)
-        setWeekPulled(prev => ({ ...prev, [task.id]: 'day' }))
-    }
-
-    function handlePullEntryToDay(entry: CalendarEntry, fromDayId: string) {
-        onPullEntryToDay(entry, fromDayId)
-        setEntryPulled(prev => ({ ...prev, [entry.id]: 'day' }))
-    }
-
-    function handlePullEntryToWeek(entry: CalendarEntry, fromDayId: string) {
-        onPullEntryToWeek(entry, fromDayId)
-        setEntryPulled(prev => ({ ...prev, [entry.id]: 'week' }))
-    }
+    const openWeekTasks = weeklyTasks.filter(t => !t.done)
 
     const sectionTitle: React.CSSProperties = {
         fontSize: '1rem',
@@ -109,80 +82,63 @@ export default function TaskReviewStep({
     }
 
     const card: React.CSSProperties = {
-        padding: '0.7rem 0.9rem',
+        padding: '0.65rem 0.9rem',
         borderRadius: 12,
         border: '1px solid #d1d5db',
         background: 'white',
-        display: 'grid',
-        gap: '0.5rem',
+        display: 'flex',
+        alignItems: 'flex-start',
+        gap: '0.75rem',
     }
 
-    const openWeekTasks = weeklyTasks.filter(t => !t.done)
-    const yesterdayLabel = new Date(`${yesterdayDayId}T12:00:00`).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })
+    const yesterdayLabel = new Date(`${yesterdayDayId}T12:00:00`).toLocaleDateString('en-US', {
+        weekday: 'long', month: 'short', day: 'numeric',
+    })
 
-    // Badge shown after a yesterday task is acted on
-    const movedBadge = (dest: YesterdayState) => {
-        if (!dest || dest === 'dismiss') return (
-            <span style={{
-                padding: '0.25rem 0.6rem',
-                borderRadius: 8,
-                background: '#f3f4f6',
-                border: '1px solid #d1d5db',
-                color: 'var(--muted)',
-                fontSize: '0.78rem',
-                fontWeight: 600,
-                whiteSpace: 'nowrap',
-            }}>
-                ✓ Released
-            </span>
-        )
-        const labels: Record<string, string> = {
-            today: 'Added to today',
-            week: 'Added to this week',
-            month: 'Added to month',
-        }
+    const isEmpty =
+        yesterdayTasks.length === 0 &&
+        todayTasks.length === 0 &&
+        openWeekTasks.length === 0 &&
+        monthEntries.length === 0
+
+    function subtaskHint(task: Task) {
+        if (!task.subtasks || task.subtasks.length === 0) return null
         return (
-            <span style={{
-                padding: '0.25rem 0.6rem',
-                borderRadius: 8,
-                background: '#d1fae5',
-                border: '1px solid #10b981',
-                color: '#065f46',
-                fontSize: '0.78rem',
-                fontWeight: 600,
-                whiteSpace: 'nowrap',
-            }}>
-                ✓ {labels[dest]}
+            <span style={{ fontSize: '0.78rem', color: 'var(--muted)', marginLeft: '0.5rem' }}>
+                ({task.subtasks.length} subtask{task.subtasks.length !== 1 ? 's' : ''})
             </span>
         )
     }
 
-    const pulledBadge = (dest: 'day' | 'week') => (
-        <span style={{
-            padding: '0.25rem 0.6rem',
-            borderRadius: 8,
-            background: '#d1fae5',
-            border: '1px solid #10b981',
-            color: '#065f46',
-            fontSize: '0.78rem',
-            fontWeight: 600,
-            whiteSpace: 'nowrap',
-        }}>
-            ✓ Added to {dest === 'day' ? 'today' : 'this week'}
-        </span>
-    )
+    // Yesterday handlers — fire action then record it for visual feedback
+    function handleYesterdayToToday(task: Task) {
+        onMoveYesterdayToToday(task)
+        setYesterdayActioned(prev => ({ ...prev, [task.id]: 'today' }))
+    }
+    function handleYesterdayToWeek(task: Task) {
+        onMoveYesterdayToWeek(task)
+        setYesterdayActioned(prev => ({ ...prev, [task.id]: 'week' }))
+    }
+    function handleYesterdayToMonth(task: Task) {
+        onMoveYesterdayToMonth(task, todayDayId)
+        setYesterdayActioned(prev => ({ ...prev, [task.id]: 'month' }))
+    }
+    function handleDismissYesterday(task: Task) {
+        onDismissYesterday(task)
+        setYesterdayActioned(prev => ({ ...prev, [task.id]: 'dismissed' }))
+    }
 
     return (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 280px', gap: '2rem', alignItems: 'start' }}>
-
-            {/* ── Main review column ── */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '2rem', alignItems: 'start' }}>
             <div style={{ display: 'grid', gap: '1.75rem' }}>
                 <div>
                     <h2 style={{ margin: '0 0 0.25rem' }}>
-                        {isStandalone ? 'Task Review' : 'Good morning ✦'}
+                        {isStandalone ? 'Task Review' : 'Your tasks'}
                     </h2>
                     <p style={{ margin: 0, color: 'var(--muted)' }}>
-                        Let's sort out what's on your plate before the day begins.
+                        {isStandalone
+                            ? 'Move tasks between lists, or let things go.'
+                            : 'Carry forward what still matters, let go of what doesn\'t.'}
                     </p>
                 </div>
 
@@ -190,53 +146,45 @@ export default function TaskReviewStep({
                 {yesterdayTasks.length > 0 && (
                     <div>
                         <p style={sectionTitle}>From yesterday ({yesterdayLabel})</p>
-                        <p style={sectionSubtitle}>What do you want to do with these?</p>
+                        <p style={sectionSubtitle}>Where should these go?</p>
                         <div style={{ display: 'grid', gap: '0.6rem' }}>
                             {yesterdayTasks.map(task => {
-                                const moved = yesterdayMoved[task.id]
+                                const action = yesterdayActioned[task.id]
+                                const isDismissed = action === 'dismissed'
                                 return (
                                     <div key={task.id} style={{
                                         ...card,
-                                        gridTemplateColumns: moved ? '1fr auto' : undefined,
-                                        alignItems: moved ? 'center' : undefined,
-                                        background: moved ? (moved === 'dismiss' ? '#f9fafb' : '#f0fdf4') : 'white',
-                                        borderColor: moved ? (moved === 'dismiss' ? '#d1d5db' : '#10b981') : '#d1d5db',
+                                        background: action ? (isDismissed ? '#f9fafb' : '#f0fdf4') : 'white',
+                                        borderColor: action ? (isDismissed ? '#d1d5db' : '#10b981') : '#d1d5db',
+                                        opacity: isDismissed ? 0.6 : 1,
                                     }}>
                                         <span style={{
                                             fontSize: '0.95rem',
                                             fontWeight: 500,
-                                            color: moved ? 'var(--muted)' : 'var(--text)',
+                                            flex: 1,
+                                            paddingTop: '0.1rem',
+                                            color: action ? 'var(--muted)' : 'var(--text)',
                                         }}>
-                                            {task.title}
+                                            {task.title}{subtaskHint(task)}
                                         </span>
-                                        {moved ? movedBadge(moved) : (
-                                            <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
-                                                <button
-                                                    onClick={() => handleYesterdayToToday(task)}
-                                                    style={actionBtn('#2c454d')}
-                                                >
-                                                    → Today
-                                                </button>
-                                                <button
-                                                    onClick={() => handleYesterdayToWeek(task)}
-                                                    style={actionBtn('#6366f1')}
-                                                >
-                                                    → This Week
-                                                </button>
-                                                <button
-                                                    onClick={() => handleYesterdayToMonth(task)}
-                                                    style={actionBtn('#0ea5e9')}
-                                                >
-                                                    → Month
-                                                </button>
-                                                <button
-                                                    onClick={() => handleYesterdayDismiss(task)}
-                                                    style={actionBtn('#9ca3af')}
-                                                >
-                                                    Let it go
-                                                </button>
-                                            </div>
-                                        )}
+                                        <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', flexShrink: 0 }}>
+                                            <button
+                                                onClick={() => handleYesterdayToToday(task)}
+                                                style={actionBtn('#2c454d', action === 'today')}
+                                            >→ Today</button>
+                                            <button
+                                                onClick={() => handleYesterdayToWeek(task)}
+                                                style={actionBtn('#6366f1', action === 'week')}
+                                            >→ Week</button>
+                                            <button
+                                                onClick={() => handleYesterdayToMonth(task)}
+                                                style={actionBtn('#0ea5e9', action === 'month')}
+                                            >→ Month</button>
+                                            <button
+                                                onClick={() => handleDismissYesterday(task)}
+                                                style={actionBtn('#9ca3af', action === 'dismissed')}
+                                            >Let it go</button>
+                                        </div>
                                     </div>
                                 )
                             })}
@@ -244,112 +192,82 @@ export default function TaskReviewStep({
                     </div>
                 )}
 
-                {/* Section 2: This week's open tasks */}
+                {/* Section 2: Today's tasks */}
+                {todayTasks.length > 0 && (
+                    <div>
+                        <p style={sectionTitle}>Today</p>
+                        <p style={sectionSubtitle}>Move anything that doesn't belong today.</p>
+                        <div style={{ display: 'grid', gap: '0.5rem' }}>
+                            {todayTasks.map(task => (
+                                <div key={task.id} style={{ ...card, opacity: task.done ? 0.5 : 1 }}>
+                                    <span style={{
+                                        fontSize: '0.9rem',
+                                        flex: 1,
+                                        paddingTop: '0.1rem',
+                                        textDecoration: task.done ? 'line-through' : 'none',
+                                    }}>
+                                        {task.title}{subtaskHint(task)}
+                                    </span>
+                                    {!task.done && (
+                                        <div style={{ display: 'flex', gap: '0.4rem', flexShrink: 0 }}>
+                                            <button onClick={() => onMoveTodayToWeek(task)} style={actionBtn('#6366f1')}>→ Week</button>
+                                            <button onClick={() => onMoveTodayToMonth(task, todayDayId)} style={actionBtn('#0ea5e9')}>→ Month</button>
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* Section 3: This week's open tasks */}
                 {openWeekTasks.length > 0 && (
                     <div>
-                        <p style={sectionTitle}>This week's tasks</p>
-                        <p style={sectionSubtitle}>Pull any to today — it'll be removed from the weekly list.</p>
+                        <p style={sectionTitle}>This week</p>
+                        <p style={sectionSubtitle}>Pull any to today, or push to month.</p>
                         <div style={{ display: 'grid', gap: '0.5rem' }}>
-                            {openWeekTasks.map(task => {
-                                const pulled = weekPulled[task.id]
-                                return (
-                                    <div key={task.id} style={{
-                                        ...card,
-                                        gridTemplateColumns: '1fr auto',
-                                        alignItems: 'center',
-                                        background: pulled ? '#f0fdf4' : 'white',
-                                        borderColor: pulled ? '#10b981' : '#d1d5db',
-                                    }}>
-                                        <span style={{
-                                            fontSize: '0.93rem',
-                                            color: pulled ? 'var(--muted)' : 'var(--text)',
-                                        }}>
-                                            {task.title}
-                                        </span>
-                                        {pulled ? pulledBadge('day') : (
-                                            <button
-                                                onClick={() => handlePullWeekToDay(task)}
-                                                style={{
-                                                    padding: '0.3rem 0.7rem',
-                                                    borderRadius: 8,
-                                                    border: '1px solid #2c454d',
-                                                    background: 'white',
-                                                    color: '#2c454d',
-                                                    cursor: 'pointer',
-                                                    fontSize: '0.82rem',
-                                                    whiteSpace: 'nowrap',
-                                                }}
-                                            >
-                                                → Today
-                                            </button>
-                                        )}
+                            {openWeekTasks.map(task => (
+                                <div key={task.id} style={card}>
+                                    <span style={{ fontSize: '0.9rem', flex: 1, paddingTop: '0.1rem' }}>
+                                        {task.title}{subtaskHint(task)}
+                                    </span>
+                                    <div style={{ display: 'flex', gap: '0.4rem', flexShrink: 0 }}>
+                                        <button onClick={() => onMoveWeekToToday(task)} style={actionBtn('#2c454d')}>→ Today</button>
+                                        <button onClick={() => onMoveWeekToMonth(task, todayDayId)} style={actionBtn('#0ea5e9')}>→ Month</button>
                                     </div>
-                                )
-                            })}
+                                </div>
+                            ))}
                         </div>
                     </div>
                 )}
 
-                {/* Section 3: Month calendar task entries */}
+                {/* Section 4: Monthly calendar task entries */}
                 {monthEntries.length > 0 && (
                     <div>
-                        <p style={sectionTitle}>This month's planned tasks</p>
-                        <p style={sectionSubtitle}>Pull any into your week or today.</p>
+                        <p style={sectionTitle}>On the calendar this month</p>
+                        <p style={sectionSubtitle}>Pull any to today or this week.</p>
                         <div style={{ display: 'grid', gap: '0.5rem' }}>
-                            {monthEntries.map(({ entry, dayId }) => {
-                                const date = new Date(`${dayId}T12:00:00`)
-                                const dateLabel = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-                                const pulled = entryPulled[entry.id]
+                            {monthEntries.map(({ entry, dayId: fromDayId }) => {
+                                const entryDate = new Date(`${fromDayId}T12:00:00`).toLocaleDateString('en-US', {
+                                    month: 'short', day: 'numeric',
+                                })
                                 return (
-                                    <div key={entry.id} style={{
-                                        ...card,
-                                        gridTemplateColumns: '1fr auto',
-                                        background: pulled ? '#f0fdf4' : 'white',
-                                        borderColor: pulled ? '#10b981' : '#d1d5db',
-                                    }}>
-                                        <div>
-                                            <span style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>{dateLabel} </span>
-                                            <span style={{
-                                                fontSize: '0.93rem',
-                                                color: pulled ? 'var(--muted)' : 'var(--text)',
-                                            }}>
-                                                {entry.title}
+                                    <div key={entry.id} style={card}>
+                                        <span style={{ fontSize: '0.9rem', flex: 1, paddingTop: '0.1rem' }}>
+                                            {entry.title}
+                                            <span style={{ fontSize: '0.78rem', color: 'var(--muted)', marginLeft: '0.4rem' }}>
+                                                {entryDate}
                                             </span>
+                                            {entry.subtasks && entry.subtasks.length > 0 && (
+                                                <span style={{ fontSize: '0.78rem', color: 'var(--muted)', marginLeft: '0.5rem' }}>
+                                                    ({entry.subtasks.length} subtask{entry.subtasks.length !== 1 ? 's' : ''})
+                                                </span>
+                                            )}
+                                        </span>
+                                        <div style={{ display: 'flex', gap: '0.4rem', flexShrink: 0 }}>
+                                            <button onClick={() => onMoveMonthToToday(entry, fromDayId)} style={actionBtn('#2c454d')}>→ Today</button>
+                                            <button onClick={() => onMoveMonthToWeek(entry, fromDayId)} style={actionBtn('#6366f1')}>→ Week</button>
                                         </div>
-                                        {pulled && pulled !== 'idle' ? pulledBadge(pulled) : (
-                                            <div style={{ display: 'flex', gap: '0.35rem' }}>
-                                                <button
-                                                    onClick={() => handlePullEntryToWeek(entry, dayId)}
-                                                    style={{
-                                                        padding: '0.3rem 0.55rem',
-                                                        borderRadius: 8,
-                                                        border: '1px solid #6366f1',
-                                                        background: 'white',
-                                                        color: '#6366f1',
-                                                        cursor: 'pointer',
-                                                        fontSize: '0.78rem',
-                                                        whiteSpace: 'nowrap',
-                                                    }}
-                                                >
-                                                    → Week
-                                                </button>
-                                                <button
-                                                    onClick={() => handlePullEntryToDay(entry, dayId)}
-                                                    style={{
-                                                        padding: '0.3rem 0.55rem',
-                                                        borderRadius: 8,
-                                                        border: '1px solid #2c454d',
-                                                        background: 'white',
-                                                        color: '#2c454d',
-                                                        cursor: 'pointer',
-                                                        fontSize: '0.78rem',
-                                                        whiteSpace: 'nowrap',
-                                                    }}
-                                                >
-                                                    → Today
-                                                </button>
-                                            </div>
-                                        )}
                                     </div>
                                 )
                             })}
@@ -357,99 +275,41 @@ export default function TaskReviewStep({
                     </div>
                 )}
 
-                {yesterdayTasks.length === 0 && openWeekTasks.length === 0 && monthEntries.length === 0 && (
+                {isEmpty && (
                     <p style={{ color: 'var(--muted)', margin: 0 }}>You're all caught up — nothing to review!</p>
                 )}
 
-                <div style={{ display: 'grid', gap: '0.5rem' }}>
-                    <button
-                        onClick={onDone}
-                        disabled={yesterdayTasks.length > 0 && !allYesterdayDecided}
-                        style={{
-                            padding: '0.75rem 1.5rem',
-                            borderRadius: 12,
-                            border: 'none',
-                            background: (yesterdayTasks.length === 0 || allYesterdayDecided) ? '#2c454d' : '#d1d5db',
-                            color: (yesterdayTasks.length === 0 || allYesterdayDecided) ? 'white' : '#9ca3af',
-                            cursor: (yesterdayTasks.length === 0 || allYesterdayDecided) ? 'pointer' : 'default',
-                            fontSize: '1rem',
-                            fontWeight: 600,
-                            justifySelf: 'start',
-                        }}
-                    >
-                        {isStandalone ? 'Done' : 'Continue to today →'}
-                    </button>
-                    {yesterdayTasks.length > 0 && !allYesterdayDecided && (
-                        <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--muted)' }}>
-                            Make a decision for each item from yesterday to continue.
-                        </p>
-                    )}
-                </div>
+                <button
+                    onClick={onDone}
+                    style={{
+                        padding: '0.75rem 1.5rem',
+                        borderRadius: 12,
+                        border: 'none',
+                        background: '#2c454d',
+                        color: 'white',
+                        cursor: 'pointer',
+                        fontSize: '1rem',
+                        fontWeight: 600,
+                        justifySelf: 'start',
+                    }}
+                >
+                    {isStandalone ? 'Done' : 'Continue to today →'}
+                </button>
             </div>
-
-            {/* ── Today's tasks sidebar ── */}
-            <div style={{
-                position: 'sticky',
-                top: '2rem',
-                padding: '1rem',
-                borderRadius: 14,
-                border: '1px solid #d1d5db',
-                background: 'white',
-                display: 'grid',
-                gap: '0.75rem',
-            }}>
-                <h3 style={{ margin: 0, fontSize: '0.95rem', color: '#2c454d' }}>
-                    Today's tasks
-                </h3>
-                {todayTasks.length === 0 ? (
-                    <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--muted)' }}>Nothing yet.</p>
-                ) : (
-                    <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: '0.4rem' }}>
-                        {todayTasks.map(t => (
-                            <li key={t.id} style={{
-                                fontSize: '0.88rem',
-                                padding: '0.45rem 0.6rem',
-                                borderRadius: 8,
-                                border: '1px solid #e5e7eb',
-                                background: '#f9fafb',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '0.4rem',
-                            }}>
-                                <span style={{
-                                    width: 6, height: 6, borderRadius: '50%',
-                                    background: '#2c454d', flexShrink: 0,
-                                }} />
-                                <span style={{
-                                    textDecoration: t.done ? 'line-through' : 'none',
-                                    color: t.done ? 'var(--muted)' : 'var(--text)',
-                                }}>
-                                    {t.title}
-                                </span>
-                            </li>
-                        ))}
-                    </ul>
-                )}
-                <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--muted)', lineHeight: 1.4 }}>
-                    Tasks you pull in will appear here.
-                </p>
-            </div>
-
         </div>
     )
 }
 
-// Extracted button style helper to keep the JSX clean
-function actionBtn(color: string): React.CSSProperties {
+function actionBtn(color: string, active = false): React.CSSProperties {
     return {
         padding: '0.3rem 0.65rem',
         borderRadius: 8,
         border: `1px solid ${color}`,
-        background: 'white',
-        color: color,
+        background: active ? color : 'white',
+        color: active ? 'white' : color,
         cursor: 'pointer',
         fontSize: '0.8rem',
-        fontWeight: 400,
-        transition: 'all 0.1s',
+        fontWeight: active ? 600 : 400,
+        whiteSpace: 'nowrap',
     }
 }

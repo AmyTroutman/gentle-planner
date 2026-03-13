@@ -1,13 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { getWeekId, getPreviousWeekId, getDayId } from '../../lib/dates'
 import type { WeeksMap } from '../morningFlow/morningFlow.types'
-import type { WeeklyResetStep, WeeklyResetData, WeeklyResetTaskDecision } from './weeklyReset.types'
+import type { WeeklyResetStep, WeeklyResetData } from './weeklyReset.types'
 import type { Task } from '../tasks/tasks.types'
 import type { ChatMessage } from '../journal/journal.types'
 import WrenSidebar from './WrenSidebar'
-
-// ─── Step UI components (kept for confirm panels) ───────────────────────────
-import TasksStep from './steps/TasksStep'
+import TaskReviewStep, { type TaskReviewProps } from '../tasks/TaskReviewStep'
 
 // ─── Helper types ────────────────────────────────────────────────────────────
 
@@ -18,6 +16,8 @@ type Props = {
     // Context passed from MorningFlow for Wren
     journalByDay: Record<string, string>
     chatsByDay: Record<string, ChatMessage[]>
+    // Full task review data & handlers — passed from MorningFlow
+    taskReviewProps: Omit<TaskReviewProps, 'onDone' | 'isStandalone'>
 }
 
 // ─── Firestore helpers ───────────────────────────────────────────────────────
@@ -82,14 +82,6 @@ function updateLookback(prev: WeeksMap, weekId: string, patch: { meaningful?: st
     const merged = ensureWeekHasWeeklyReset(week as any) as any
     const reset: WeeklyResetData = merged.weeklyReset
     return { ...prev, [weekId]: { ...merged, weeklyReset: { ...reset, lookback: { ...reset.lookback, ...patch } } } }
-}
-
-function updateTaskDecision(prev: WeeksMap, weekId: string, taskId: string, decision: WeeklyResetTaskDecision): WeeksMap {
-    const week = prev[weekId]
-    if (!week) return prev
-    const merged = ensureWeekHasWeeklyReset(week as any) as any
-    const reset: WeeklyResetData = merged.weeklyReset
-    return { ...prev, [weekId]: { ...merged, weeklyReset: { ...reset, taskDecisions: { ...reset.taskDecisions, [taskId]: decision } } } }
 }
 
 function updateThemeFields(prev: WeeksMap, weekId: string, patch: { pausePrompt?: string; theme?: string; inspiration?: string; behavior?: string }): WeeksMap {
@@ -201,7 +193,7 @@ function ConfirmPanel({ title, children, open, onToggle }: {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export default function WeeklyResetFlow({ weeks, setWeeks, onClose, journalByDay, chatsByDay }: Props) {
+export default function WeeklyResetFlow({ weeks, setWeeks, onClose, journalByDay, chatsByDay, taskReviewProps }: Props) {
     const weekId = useMemo(() => getWeekId(new Date()), [])
     const prevWeekId = useMemo(() => getPreviousWeekId(new Date()), [])
 
@@ -222,35 +214,18 @@ export default function WeeklyResetFlow({ weeks, setWeeks, onClose, journalByDay
     // Wren chat messages (persisted to Firestore)
     const wrenChat: ChatMessage[] = weeklyReset?.wrenChat ?? []
 
-    function setWrenChat(messages: ChatMessage[]) {
-        setWeeks((prev) => updateWrenChat(prev, weekId, messages))
-    }
-
-    // Ensure week doc has weeklyReset initialized
-    useEffect(() => {
-        if (!week) return
-        setWeeks((prev) => {
-            const existing = prev[weekId]
-            if (!existing) return prev
-            const merged = ensureWeekHasWeeklyReset(existing as any)
-            const changed = JSON.stringify((existing as any).weeklyReset) !== JSON.stringify((merged as any).weeklyReset)
-            if (!changed) return prev
-            return { ...prev, [weekId]: merged }
-        })
-    }, [weekId, week, setWeeks])
-
-    // Build week's day IDs for pulling journal/chat context
+    // Build prev-week day IDs for Wren context
     const prevWeekDayIds = useMemo(() => {
-        const [year, month, day] = prevWeekId.split('-').map(Number)
         const ids: string[] = []
+        const start = new Date(prevWeekId)
         for (let i = 0; i < 7; i++) {
-            const d = new Date(year, month - 1, day + i)
+            const d = new Date(start)
+            d.setDate(d.getDate() + i)
             ids.push(getDayId(d))
         }
         return ids
     }, [prevWeekId])
 
-    // Gather context for Wren
     const wrenContext = useMemo(() => {
         const reflections = (prevWeek as any)?.reflections ?? []
         const reflectionTexts: string[] = reflections.map((r: { text: string }) => r.text).filter(Boolean)
@@ -370,10 +345,32 @@ export default function WeeklyResetFlow({ weeks, setWeeks, onClose, journalByDay
                                 Wren will guide you through your reset. Take your time — everything here is skippable.
                             </p>
                             <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-                                <button onClick={begin} style={{ padding: '0.65rem 1.1rem', borderRadius: 10, border: '1px solid #2c454d', background: '#2c454d', color: 'white', cursor: 'pointer', fontSize: '0.9rem' }}>
-                                    Begin
+                                <button
+                                    onClick={begin}
+                                    style={{
+                                        padding: '0.6rem 1.25rem',
+                                        borderRadius: 10,
+                                        border: 'none',
+                                        background: '#2c454d',
+                                        color: 'white',
+                                        cursor: 'pointer',
+                                        fontSize: '0.9rem',
+                                    }}
+                                >
+                                    Begin reset
                                 </button>
-                                <button onClick={skipWeek} style={{ padding: '0.65rem 1.1rem', borderRadius: 10, border: '1px solid #d1d5db', background: 'transparent', color: 'var(--muted)', cursor: 'pointer', fontSize: '0.9rem' }}>
+                                <button
+                                    onClick={skipWeek}
+                                    style={{
+                                        padding: '0.6rem 1.25rem',
+                                        borderRadius: 10,
+                                        border: '1px solid #d1d5db',
+                                        background: 'white',
+                                        color: 'var(--muted)',
+                                        cursor: 'pointer',
+                                        fontSize: '0.9rem',
+                                    }}
+                                >
                                     Skip this week
                                 </button>
                             </div>
@@ -383,7 +380,7 @@ export default function WeeklyResetFlow({ weeks, setWeeks, onClose, journalByDay
                     {step === 'lookback' && (
                         <div style={{ display: 'grid', gap: '0.75rem' }}>
                             <p style={{ margin: 0, color: 'var(--muted)', fontSize: '0.9rem' }}>
-                                Talk with Wren about how last week felt. When you're ready, she'll help you move on.
+                                Take a moment to look back. Wren can help you find the thread.
                             </p>
                             <ConfirmPanel
                                 title="Save lookback notes (optional)"
@@ -418,36 +415,11 @@ export default function WeeklyResetFlow({ weeks, setWeeks, onClose, journalByDay
                     )}
 
                     {step === 'tasks' && (
-                        <div style={{ display: 'grid', gap: '0.75rem' }}>
-                            <p style={{ margin: 0, color: 'var(--muted)', fontSize: '0.9rem' }}>
-                                Talk through your tasks with Wren — carry forward what still matters, let go of what doesn't.
-                            </p>
-                            <TasksStep
-                                tasks={prevWeeklyTasks}
-                                taskDecisions={r.taskDecisions}
-                                onDecide={(taskId, decision) => {
-                                    setWeeks((prev) => updateTaskDecision(prev, weekId, taskId, decision))
-                                    if (decision === 'carry') {
-                                        const t = prevWeeklyTasks.find((x) => x.id === taskId)
-                                        if (!t) return
-                                        const newTask: Task = {
-                                            id: crypto.randomUUID(),
-                                            title: t.title,
-                                            done: false,
-                                            createdAt: new Date().toISOString(),
-                                            subtasks: t.subtasks?.map((s) => ({ ...s, id: crypto.randomUUID(), done: false })),
-                                        }
-                                        setWeeks((prev) => {
-                                            const w = prev[weekId]
-                                            if (!w) return prev
-                                            return { ...prev, [weekId]: { ...(w as any), weeklyTasks: [newTask, ...((w as any).weeklyTasks ?? [])] } }
-                                        })
-                                    }
-                                }}
-                                onNext={() => setStep('theme')}
-                                onSkip={skipThisStep}
-                            />
-                        </div>
+                        <TaskReviewStep
+                            {...taskReviewProps}
+                            onDone={() => setStep('theme')}
+                            isStandalone={false}
+                        />
                     )}
 
                     {step === 'theme' && (
@@ -496,14 +468,23 @@ export default function WeeklyResetFlow({ weeks, setWeeks, onClose, journalByDay
 
                     {step === 'complete' && (
                         <div style={{ display: 'grid', gap: '1rem', paddingTop: '1rem' }}>
-                            <p style={{ margin: 0, color: '#374151', fontSize: '0.95rem', lineHeight: 1.6 }}>
-                                You've closed out the week. Whatever comes next, you've taken a moment to look at it clearly.
+                            <p style={{ margin: 0, color: 'var(--muted)', fontSize: '0.95rem', lineHeight: 1.6 }}>
+                                Reset complete. You're ready for the week.
                             </p>
                             <button
                                 onClick={onClose}
-                                style={{ alignSelf: 'start', padding: '0.65rem 1.1rem', borderRadius: 10, border: '1px solid #2c454d', background: '#2c454d', color: 'white', cursor: 'pointer', fontSize: '0.9rem' }}
+                                style={{
+                                    padding: '0.6rem 1.25rem',
+                                    borderRadius: 10,
+                                    border: 'none',
+                                    background: '#2c454d',
+                                    color: 'white',
+                                    cursor: 'pointer',
+                                    fontSize: '0.9rem',
+                                    justifySelf: 'start',
+                                }}
                             >
-                                Done
+                                Close
                             </button>
                         </div>
                     )}
@@ -513,7 +494,7 @@ export default function WeeklyResetFlow({ weeks, setWeeks, onClose, journalByDay
             {/* ── Right: Wren sidebar ───────────────────────────── */}
             <WrenSidebar
                 messages={wrenChat}
-                onMessagesChange={setWrenChat}
+                onMessagesChange={(msgs) => setWeeks((prev) => updateWrenChat(prev, weekId, msgs))}
                 context={wrenContext}
                 onSuggestNext={() => setPendingNext(true)}
                 onConfirmNext={advanceStep}
