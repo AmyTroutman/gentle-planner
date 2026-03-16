@@ -1,30 +1,35 @@
 import { useMemo, useState } from 'react'
 import type { Task } from './tasks.types'
+import { getTasksForWeek, addTask, toggleTask, deleteTask } from './taskHelpers'
 import TaskItem from './TaskItem'
 
 type Props = {
-    tasks: Task[]
-    onAdd: (title: string) => void
-    onToggle: (id: string) => void
-    onDelete: (id: string) => void
-    onUpdate: (task: Task) => void
+    tasks: Record<string, Task>
+    setTasks: (updater: (prev: Record<string, Task>) => Record<string, Task>) => void
+    weekId: string
 }
 
-export default function WeeklyTasks({ tasks, onAdd, onToggle, onDelete, onUpdate }: Props) {
+export default function WeeklyTasks({ tasks, setTasks, weekId }: Props) {
     const [title, setTitle] = useState('')
+
+    const weekTasks = useMemo(() => getTasksForWeek(tasks, weekId), [tasks, weekId])
 
     const { openTasks, doneTasks } = useMemo(() => {
         const open: Task[] = []
         const done: Task[] = []
-        for (const t of tasks) (t.done ? done : open).push(t)
+        for (const t of weekTasks) (t.done ? done : open).push(t)
         return { openTasks: open, doneTasks: done }
-    }, [tasks])
+    }, [weekTasks])
 
     function submit() {
         const cleaned = title.trim()
         if (!cleaned) return
-        onAdd(cleaned)
+        setTasks(prev => addTask(prev, { scope: 'week', weekId, title: cleaned }))
         setTitle('')
+    }
+
+    function handleUpdate(updated: Task) {
+        setTasks(prev => ({ ...prev, [updated.id]: updated }))
     }
 
     return (
@@ -68,9 +73,9 @@ export default function WeeklyTasks({ tasks, onAdd, onToggle, onDelete, onUpdate
                         <TaskItem
                             key={t.id}
                             task={t}
-                            onToggle={() => onToggle(t.id)}
-                            onDelete={() => onDelete(t.id)}
-                            onUpdate={onUpdate}
+                            onToggle={() => setTasks(prev => toggleTask(prev, t.id))}
+                            onDelete={() => setTasks(prev => deleteTask(prev, t.id))}
+                            onUpdate={handleUpdate}
                         />
                     ))}
                 </ul>
@@ -86,9 +91,9 @@ export default function WeeklyTasks({ tasks, onAdd, onToggle, onDelete, onUpdate
                             <TaskItem
                                 key={t.id}
                                 task={t}
-                                onToggle={() => onToggle(t.id)}
-                                onDelete={() => onDelete(t.id)}
-                                onUpdate={onUpdate}
+                                onToggle={() => setTasks(prev => toggleTask(prev, t.id))}
+                                onDelete={() => setTasks(prev => deleteTask(prev, t.id))}
+                                onUpdate={handleUpdate}
                             />
                         ))}
                     </ul>

@@ -14,7 +14,7 @@ const USER_REF = () => doc(db, 'users', USER_ID)
 export type UserDoc = {
     weeks: WeeksMap
     mealsByDay: Record<string, DailyMeals>
-    tasksByDay: Record<string, Task[]>
+    tasks: Record<string, Task>
     notesByDay: Record<string, string>
     journalByDay: Record<string, string>
     chatsByDay: Record<string, ChatMessage[]>
@@ -26,7 +26,7 @@ export type UserDoc = {
 const DEFAULT_USER_DOC: UserDoc = {
     weeks: {},
     mealsByDay: {},
-    tasksByDay: {},
+    tasks: {},
     notesByDay: {},
     journalByDay: {},
     chatsByDay: {},
@@ -130,9 +130,9 @@ export function useUserDoc() {
         [updateField]
     )
 
-    const setTasksByDay = useCallback(
-        (updater: Record<string, Task[]> | ((prev: Record<string, Task[]>) => Record<string, Task[]>)) =>
-            updateField('tasksByDay', updater),
+    const setTasks = useCallback(
+        (updater: Record<string, Task> | ((prev: Record<string, Task>) => Record<string, Task>)) =>
+            updateField('tasks', updater),
         [updateField]
     )
 
@@ -178,8 +178,8 @@ export function useUserDoc() {
         setWeeks,
         mealsByDay: data.mealsByDay,
         setMealsByDay,
-        tasksByDay: data.tasksByDay,
-        setTasksByDay,
+        tasks: data.tasks,
+        setTasks,
         notesByDay: data.notesByDay,
         setNotesByDay,
         journalByDay: data.journalByDay,

@@ -1,7 +1,5 @@
-import type { Subtask } from "../tasks/tasks.types"
-
 // Tags for calendar entries — only scheduling/planning concerns
-export type CalendarTag = 'event' | 'task' | 'game' 
+export type CalendarTag = 'event' | 'game'
 
 // Tags that represent tracker data — stored in trackersByDay, not calendarEntriesByDay
 export type TrackerTag = 'period' | 'weight' | 'anxiety' | 'symptom'
@@ -17,7 +15,6 @@ export type CalendarEntry = {
     done: boolean
     movedTo?: 'week' | 'day' | null
     createdAt: string // ISO
-    subtasks?: Subtask[]  // preserved when a task is moved to the calendar
 }
 
 export type DayTracker = {

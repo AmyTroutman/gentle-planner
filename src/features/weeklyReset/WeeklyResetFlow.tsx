@@ -4,8 +4,9 @@ import type { WeeksMap } from '../morningFlow/morningFlow.types'
 import type { WeeklyResetStep, WeeklyResetData } from './weeklyReset.types'
 import type { Task } from '../tasks/tasks.types'
 import type { ChatMessage } from '../journal/journal.types'
+import { getTasksForWeek } from '../tasks/taskHelpers'
 import WrenSidebar from './WrenSidebar'
-import TaskReviewStep, { type TaskReviewProps } from '../tasks/TaskReviewStep'
+import TaskReviewStep from '../tasks/TaskReviewStep'
 
 // ─── Helper types ────────────────────────────────────────────────────────────
 
@@ -16,8 +17,11 @@ type Props = {
     // Context passed from MorningFlow for Wren
     journalByDay: Record<string, string>
     chatsByDay: Record<string, ChatMessage[]>
-    // Full task review data & handlers — passed from MorningFlow
-    taskReviewProps: Omit<TaskReviewProps, 'onDone' | 'isStandalone'>
+    // Tasks
+    tasks: Record<string, Task>
+    setTasks: (updater: Record<string, Task> | ((prev: Record<string, Task>) => Record<string, Task>)) => void
+    todayDayId: string
+    yesterdayDayId: string
 }
 
 // ─── Firestore helpers ───────────────────────────────────────────────────────
@@ -193,7 +197,7 @@ function ConfirmPanel({ title, children, open, onToggle }: {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export default function WeeklyResetFlow({ weeks, setWeeks, onClose, journalByDay, chatsByDay, taskReviewProps }: Props) {
+export default function WeeklyResetFlow({ weeks, setWeeks, onClose, journalByDay, chatsByDay, tasks, setTasks, todayDayId, yesterdayDayId }: Props) {
     const weekId = useMemo(() => getWeekId(new Date()), [])
     const prevWeekId = useMemo(() => getPreviousWeekId(new Date()), [])
 
@@ -201,7 +205,7 @@ export default function WeeklyResetFlow({ weeks, setWeeks, onClose, journalByDay
     const weeklyReset = week ? (ensureWeekHasWeeklyReset(week as any) as any).weeklyReset as WeeklyResetData : undefined
 
     const prevWeek = weeks[prevWeekId]
-    const prevWeeklyTasks = ((prevWeek as any)?.weeklyTasks ?? []) as Task[]
+    const prevWeeklyTasks = getTasksForWeek(tasks, prevWeekId)
     const prevWeekTheme = (prevWeek as any)?.theme as string | undefined
 
     const [step, setStep] = useState<WeeklyResetStep>('intro')
@@ -416,7 +420,11 @@ export default function WeeklyResetFlow({ weeks, setWeeks, onClose, journalByDay
 
                     {step === 'tasks' && (
                         <TaskReviewStep
-                            {...taskReviewProps}
+                            tasks={tasks}
+                            setTasks={setTasks}
+                            yesterdayDayId={yesterdayDayId}
+                            todayDayId={todayDayId}
+                            weekId={weekId}
                             onDone={() => setStep('theme')}
                             isStandalone={false}
                         />

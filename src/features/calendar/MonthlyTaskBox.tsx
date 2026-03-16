@@ -1,11 +1,13 @@
-import type { CalendarEntry } from '../calendar/calendar.types'
+import type { Task } from '../tasks/tasks.types'
+import type { CalendarEntry } from './calendar.types'
+import { getMonthTasks, moveTaskToToday, moveTaskToWeek } from '../tasks/taskHelpers'
 
 type Props = {
+    tasks: Record<string, Task>
+    setTasks: (updater: (prev: Record<string, Task>) => Record<string, Task>) => void
     calendarEntriesByDay: Record<string, CalendarEntry[]>
-    currentWeekId: string
-    onPullToDay: (entry: CalendarEntry, dayId: string) => void
-    onPullToWeek: (entry: CalendarEntry, weekId: string) => void
-    todayDayId: string
+    dayId: string
+    weekId: string
 }
 
 function getDayIdsForCurrentMonth(todayDayId: string): string[] {
@@ -19,33 +21,35 @@ function getDayIdsForCurrentMonth(todayDayId: string): string[] {
 }
 
 export default function MonthlyTaskBox({
+    tasks,
+    setTasks,
     calendarEntriesByDay,
-    currentWeekId,
-    onPullToDay,
-    onPullToWeek,
-    todayDayId,
+    dayId,
+    weekId,
 }: Props) {
-    const monthDayIds = getDayIdsForCurrentMonth(todayDayId)
+    const monthDayIds = getDayIdsForCurrentMonth(dayId)
 
-    // Collect all event entries + undone task entries for this month
-    type EntryWithDay = { entry: CalendarEntry; dayId: string }
-    const relevant: EntryWithDay[] = []
-
-    for (const dayId of monthDayIds) {
-        if (dayId < todayDayId) continue 
-        const entries = calendarEntriesByDay[dayId] ?? []
+    // Upcoming events/games from calendar (no task entries anymore)
+    type EntryWithDay = { entry: CalendarEntry; entryDayId: string }
+    const upcomingEvents: EntryWithDay[] = []
+    for (const d of monthDayIds) {
+        if (d < dayId) continue
+        const entries = calendarEntriesByDay[d] ?? []
         for (const entry of entries) {
-            const isEvent = entry.tags.includes('event')
-            const isGame = entry.tags.includes('game')
-            const isUnfinishedTask = entry.tags.includes('task') && !entry.done
-            if (isEvent || isUnfinishedTask || isGame) {
-                relevant.push({ entry, dayId })
+            if (entry.tags.includes('event') || entry.tags.includes('game')) {
+                upcomingEvents.push({ entry, entryDayId: d })
             }
         }
     }
+    upcomingEvents.sort((a, b) => a.entryDayId.localeCompare(b.entryDayId))
 
-    // Sort by date
-    relevant.sort((a, b) => a.dayId.localeCompare(b.dayId))
+    // Month-scope tasks, open only
+    const currentMonth = dayId.slice(0, 7) // 'YYYY-MM'
+
+    const monthTasks = getMonthTasks(tasks).filter(t =>
+        !t.done &&
+        (!t.dueDate || t.dueDate.startsWith(currentMonth))
+    )
 
     const btnStyle = (accent: string): React.CSSProperties => ({
         padding: '0.2rem 0.55rem',
@@ -60,25 +64,23 @@ export default function MonthlyTaskBox({
 
     const tagColors: Record<string, string> = {
         event: '#0ea5e9',
-        task: '#8b5cf6',
-        game: '#00653e'
+        game: '#00653e',
     }
+
+    const hasContent = upcomingEvents.length > 0 || monthTasks.length > 0
 
     return (
         <section style={{ display: 'grid', gap: '0.75rem' }}>
-            {relevant.length === 0 ? (
+            {!hasContent ? (
                 <p style={{ margin: 0, color: 'var(--muted)', fontSize: '0.92rem' }}>
                     No events or tasks this month.
                 </p>
             ) : (
                 <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: '0.5rem' }}>
-                    {relevant.map(({ entry, dayId }) => {
-                        const date = new Date(`${dayId}T12:00:00`)
+                    {/* Events / games */}
+                    {upcomingEvents.map(({ entry, entryDayId }) => {
+                        const date = new Date(`${entryDayId}T12:00:00`)
                         const dateLabel = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-                        const isEvent = entry.tags.includes('event')
-                        const isTask = entry.tags.includes('task')
-                        const isGame = entry.tags.includes('game')
-
                         return (
                             <li
                                 key={entry.id}
@@ -88,64 +90,63 @@ export default function MonthlyTaskBox({
                                     padding: '0.6rem 0.75rem',
                                     borderRadius: 12,
                                     border: '1px solid #d1d5db',
-                                    background: entry.done ? '#f9fafb' : 'white',
-                                    opacity: entry.done ? 0.6 : 1,
+                                    background: 'white',
+                                }}
+                            >
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                    <span style={{ fontSize: '0.85rem', color: 'var(--muted)' }}>{dateLabel}</span>
+                                    {entry.tags.map(tag => (
+                                        <span key={tag} style={{ color: tagColors[tag] ?? 'var(--muted)', fontWeight: 600, fontSize: '0.75rem' }}>
+                                            {tag.toUpperCase()}
+                                        </span>
+                                    ))}
+                                </div>
+                                <span style={{ fontSize: '0.93rem' }}>{entry.title}</span>
+                            </li>
+                        )
+                    })}
+
+                    {/* Month tasks */}
+                    {monthTasks.map(task => {
+                        const dueDateLabel = task.dueDate
+                            ? new Date(`${task.dueDate}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                            : null
+                        return (
+                            <li
+                                key={task.id}
+                                style={{
+                                    display: 'grid',
+                                    gap: '0.35rem',
+                                    padding: '0.6rem 0.75rem',
+                                    borderRadius: 12,
+                                    border: '1px solid #d1d5db',
+                                    background: 'white',
                                 }}
                             >
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem' }}>
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', minWidth: 0 }}>
-                                        <span style={{
-                                            fontSize: '0.85rem',
-                                            color: 'var(--muted)',
-                                            display: 'flex',
-                                            gap: '0.4rem',
-                                            alignItems: 'center',
-                                        }}>
-                                            {dateLabel}
-                                            {isEvent && (
-                                                <span style={{ color: tagColors.event, fontWeight: 600, fontSize: '0.75rem' }}>EVENT</span>
-                                            )}
-                                            {isTask && (
-                                                <span style={{
-                                                    color: entry.movedTo ? '#10b981' : tagColors.task,
-                                                    fontWeight: 600,
-                                                    fontSize: '0.75rem',
-                                                }}>
-                                                    {/* TODO: this doesn't change once it's set */}
-                                                    {entry.movedTo === 'day' ? 'IN TODAY' : entry.movedTo === 'week' ? 'IN WEEK' : 'TASK'}
-                                                </span>
-                                            )}
-                                            {isGame && (
-                                                <span style={{ color: tagColors.game, fontWeight: 600, fontSize: '0.75rem' }}>GAME</span>
-                                            )}
+                                        <span style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', fontSize: '0.85rem', color: 'var(--muted)' }}>
+                                            {dueDateLabel ?? 'No date'}
+                                            <span style={{ color: '#8b5cf6', fontWeight: 600, fontSize: '0.75rem' }}>TASK</span>
                                         </span>
-                                        <span style={{
-                                            fontSize: '0.93rem',
-                                            textDecoration: entry.done ? 'line-through' : 'none',
-                                        }}>
-                                            {entry.title}
-                                        </span>
+                                        <span style={{ fontSize: '0.93rem' }}>{task.title}</span>
                                     </div>
-
-                                    {/* Action buttons — only for tasks that aren't done */}
-                                    {isTask && !entry.done && (
-                                        <div style={{ display: 'flex', gap: '0.3rem', flexShrink: 0 }}>
-                                            <button
-                                                style={btnStyle('#6366f1')}
-                                                onClick={() => onPullToWeek(entry, currentWeekId)}
-                                                title="Add to this week"
-                                            >
-                                                → Week
-                                            </button>
-                                            <button
-                                                style={btnStyle('#2c454d')}
-                                                onClick={() => onPullToDay(entry, todayDayId)}
-                                                title="Add to today"
-                                            >
-                                                → Today
-                                            </button>
-                                        </div>
-                                    )}
+                                    <div style={{ display: 'flex', gap: '0.3rem', flexShrink: 0 }}>
+                                        <button
+                                            style={btnStyle('#6366f1')}
+                                            onClick={() => setTasks(prev => moveTaskToWeek(prev, task.id, weekId))}
+                                            title="Add to this week"
+                                        >
+                                            → Week
+                                        </button>
+                                        <button
+                                            style={btnStyle('#2c454d')}
+                                            onClick={() => setTasks(prev => moveTaskToToday(prev, task.id, dayId, weekId))}
+                                            title="Add to today"
+                                        >
+                                            → Today
+                                        </button>
+                                    </div>
                                 </div>
                             </li>
                         )

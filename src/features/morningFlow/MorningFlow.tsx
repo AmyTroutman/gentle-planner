@@ -9,31 +9,21 @@ import { BASE_AFFIRMATIONS } from '../../lib/affirmations'
 import BreakfastStep from './steps/BreakfastStep'
 import TransitionStep from './steps/TransitionStep'
 import TasksPage from '../tasks/TasksPage'
-import type { Task } from '../tasks/tasks.types'
 import type { DailyMeals } from '../meals/meals.types'
 import type { ChatMessage } from '../journal/journal.types'
-import type { CalendarEntry, DayTracker } from '../calendar/calendar.types'
+import type { DayTracker } from '../calendar/calendar.types'
 import CalendarPage from '../calendar/CalendarPage'
 import JournalPage from '../journal/JournalPage'
 import WeeklyThemeSetupStep from './steps/WeeklyThemeSetupStep'
 import WeeklyResetFlow from '../weeklyReset/WeeklyResetFlow'
 import NotebooksSection from '../notebooks/NotebooksSection'
 import TaskReviewStep from '../tasks/TaskReviewStep'
+import { getYesterdayIncompleteTasks } from '../tasks/taskHelpers'
 
 function getYesterdayDayId(): string {
     const d = new Date()
     d.setDate(d.getDate() - 1)
     return getDayId(d)
-}
-
-function getDayIdsForCurrentMonth(todayDayId: string): string[] {
-    const [year, month] = todayDayId.split('-').map(Number)
-    const daysInMonth = new Date(year, month, 0).getDate()
-    const days: string[] = []
-    for (let d = 1; d <= daysInMonth; d++) {
-        days.push(`${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`)
-    }
-    return days
 }
 
 export default function MorningFlow() {
@@ -46,7 +36,7 @@ export default function MorningFlow() {
         loading,
         weeks, setWeeks,
         mealsByDay, setMealsByDay,
-        tasksByDay, setTasksByDay,
+        tasks, setTasks,
         notesByDay, setNotesByDay,
         journalByDay, setJournalByDay,
         chatsByDay, setChatsByDay,
@@ -64,8 +54,7 @@ export default function MorningFlow() {
     const showResetNudge = isSunday && !weeklyResetDone
 
     // Yesterday's incomplete daily tasks — drives whether taskReview appears in flow
-    const yesterdayIncompleteTasks = (tasksByDay[yesterdayId] ?? []).filter(t => !t.done)
-    const hasYesterdayTasks = yesterdayIncompleteTasks.length > 0
+    const hasYesterdayTasks = getYesterdayIncompleteTasks(tasks, yesterdayId).length > 0
 
     const [step, setStep] = useState<MorningStep>('greeting')
     const [stepInitialized, setStepInitialized] = useState(false)
@@ -91,30 +80,17 @@ export default function MorningFlow() {
     const [showTaskReview, setShowTaskReview] = useState(false)
 
     const todaysMeals: DailyMeals = mealsByDay[dayId] ?? { snacks: [], drinks: [] }
-    const todaysTasks = tasksByDay[dayId] ?? []
     const todaysNote = notesByDay[dayId] ?? ''
     const todaysJournal = journalByDay[dayId] ?? ''
     const todaysChat: ChatMessage[] = chatsByDay[dayId] ?? []
     const todaysTracker: DayTracker = trackersByDay[dayId] ?? { period: false, symptoms: [], medications: false }
 
     const weeklyTheme = weeks[weekId]?.theme ?? ''
-    const weeklyTasks = weeks[weekId]?.weeklyTasks ?? []
     const reflections = weeks[weekId]?.reflections ?? []
 
     const todaysReflection = reflections
         .filter((r) => r.dayId === dayId)
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]?.text ?? ''
-
-    // Month task entries (for review step and monthly box)
-    const monthDayIds = getDayIdsForCurrentMonth(dayId)
-    const monthTaskEntries: Array<{ entry: CalendarEntry; dayId: string }> = []
-    for (const d of monthDayIds) {
-        for (const e of calendarEntriesByDay[d] ?? []) {
-            if (e.tags.includes('task') && !e.done && !e.movedTo) {
-                monthTaskEntries.push({ entry: e, dayId: d })
-            }
-        }
-    }
 
     useEffect(() => {
         if (loading) return
@@ -127,7 +103,6 @@ export default function MorningFlow() {
                     theme: '',
                     reflections: [],
                     affirmationsByDay: {},
-                    weeklyTasks: [],
                     weeklyReset: { completed: false, lookback: {}, taskDecisions: {} },
                 },
             }
@@ -270,14 +245,14 @@ export default function MorningFlow() {
     }
 
     // ── Calendar entry mutations ──
-    function addCalendarEntry(forDayId: string, entry: CalendarEntry) {
+    function addCalendarEntry(forDayId: string, entry: import('../calendar/calendar.types').CalendarEntry) {
         setCalendarEntriesByDay((prev) => ({
             ...prev,
             [forDayId]: [entry, ...(prev[forDayId] ?? [])],
         }))
     }
 
-    function updateCalendarEntry(forDayId: string, entry: CalendarEntry) {
+    function updateCalendarEntry(forDayId: string, entry: import('../calendar/calendar.types').CalendarEntry) {
         setCalendarEntriesByDay((prev) => ({
             ...prev,
             [forDayId]: (prev[forDayId] ?? []).map(e => e.id === entry.id ? entry : e),
@@ -290,133 +265,6 @@ export default function MorningFlow() {
             [forDayId]: (prev[forDayId] ?? []).filter(e => e.id !== entryId),
         }))
     }
-
-    // Pull a calendar entry into today's daily tasks (removes entry from calendar)
-    function pullEntryToDay(entry: CalendarEntry, fromDayId: string) {
-        const task: Task = {
-            id: crypto.randomUUID(),
-            title: entry.title,
-            done: false,
-            createdAt: new Date().toISOString(),
-            ...(entry.subtasks && entry.subtasks.length > 0 ? { subtasks: entry.subtasks } : {}),
-        }
-        setTasksByDay((prev) => ({
-            ...prev,
-            [dayId]: [task, ...(prev[dayId] ?? [])],
-        }))
-        deleteCalendarEntry(fromDayId, entry.id)
-    }
-
-    // Pull a calendar entry into this week's tasks (removes entry from calendar)
-    function pullEntryToWeek(entry: CalendarEntry, fromDayId: string) {
-        const task: Task = {
-            id: crypto.randomUUID(),
-            title: entry.title,
-            done: false,
-            createdAt: new Date().toISOString(),
-            ...(entry.subtasks && entry.subtasks.length > 0 ? { subtasks: entry.subtasks } : {}),
-        }
-        setWeeks((prev) => {
-            const existing = prev[weekId]
-            return {
-                ...prev,
-                [weekId]: {
-                    ...existing,
-                    weeklyTasks: [task, ...(existing?.weeklyTasks ?? [])],
-                },
-            }
-        })
-        deleteCalendarEntry(fromDayId, entry.id)
-    }
-
-    // ── Task review actions ──
-    // All handlers move the task out of its source list and into the destination.
-    // Subtasks are preserved by spreading the full task object.
-
-    // Yesterday → somewhere (yesterday list is read-only in parent; no removal needed)
-    function moveYesterdayToToday(task: Task) {
-        const newTask: Task = { ...task, id: crypto.randomUUID(), createdAt: new Date().toISOString(), done: false }
-        setTasksByDay((prev) => ({ ...prev, [dayId]: [newTask, ...(prev[dayId] ?? [])] }))
-    }
-
-    function moveYesterdayToWeek(task: Task) {
-        const newTask: Task = { ...task, id: crypto.randomUUID(), createdAt: new Date().toISOString(), done: false }
-        setWeeks((prev) => {
-            const existing = prev[weekId]
-            return { ...prev, [weekId]: { ...existing, weeklyTasks: [newTask, ...(existing?.weeklyTasks ?? [])] } }
-        })
-    }
-
-    function moveYesterdayToMonth(task: Task, targetDayId: string) {
-        const entry: CalendarEntry = {
-            id: crypto.randomUUID(),
-            title: task.title,
-            tags: ['task'],
-            done: false,
-            createdAt: new Date().toISOString(),
-            ...(task.subtasks && task.subtasks.length > 0 ? { subtasks: task.subtasks } : {}),
-        }
-        addCalendarEntry(targetDayId, entry)
-    }
-
-    function dismissYesterday(_task: Task) {
-        // No-op in parent — yesterday tasks are already filtered by !done and are
-        // historical; dismissing just means "don't carry forward", which is handled
-        // by the user simply not moving them. The UI removes the button on dismiss.
-        // If you want to mark them done instead, swap this for a toggleTask call.
-    }
-
-    // Today → somewhere (removes from today)
-    function moveTodayToWeek(task: Task) {
-        const newTask: Task = { ...task, id: crypto.randomUUID(), createdAt: new Date().toISOString(), done: false }
-        setWeeks((prev) => {
-            const existing = prev[weekId]
-            return { ...prev, [weekId]: { ...existing, weeklyTasks: [newTask, ...(existing?.weeklyTasks ?? [])] } }
-        })
-        setTasksByDay((prev) => ({ ...prev, [dayId]: (prev[dayId] ?? []).filter(t => t.id !== task.id) }))
-    }
-
-    function moveTodayToMonth(task: Task, targetDayId: string) {
-        const entry: CalendarEntry = {
-            id: crypto.randomUUID(),
-            title: task.title,
-            tags: ['task'],
-            done: false,
-            createdAt: new Date().toISOString(),
-            ...(task.subtasks && task.subtasks.length > 0 ? { subtasks: task.subtasks } : {}),
-        }
-        addCalendarEntry(targetDayId, entry)
-        setTasksByDay((prev) => ({ ...prev, [dayId]: (prev[dayId] ?? []).filter(t => t.id !== task.id) }))
-    }
-
-    // Week → somewhere (removes from weeklyTasks)
-    function moveWeekToToday(task: Task) {
-        const newTask: Task = { ...task, id: crypto.randomUUID(), createdAt: new Date().toISOString(), done: false }
-        setTasksByDay((prev) => ({ ...prev, [dayId]: [newTask, ...(prev[dayId] ?? [])] }))
-        setWeeks((prev) => {
-            const existing = prev[weekId]
-            if (!existing) return prev
-            return { ...prev, [weekId]: { ...existing, weeklyTasks: (existing.weeklyTasks ?? []).filter(t => t.id !== task.id) } }
-        })
-    }
-
-    function moveWeekToMonth(task: Task, targetDayId: string) {
-        const entry: CalendarEntry = {
-            id: crypto.randomUUID(),
-            title: task.title,
-            tags: ['task'],
-            done: false,
-            createdAt: new Date().toISOString(),
-            ...(task.subtasks && task.subtasks.length > 0 ? { subtasks: task.subtasks } : {}),
-        }
-        addCalendarEntry(targetDayId, entry)
-        setWeeks((prev) => {
-            const existing = prev[weekId]
-            if (!existing) return prev
-            return { ...prev, [weekId]: { ...existing, weeklyTasks: (existing.weeklyTasks ?? []).filter(t => t.id !== task.id) } }
-        })
-    }
-
 
     function next() {
         const order: MorningStep[] = [
@@ -497,98 +345,6 @@ export default function MorningFlow() {
         })
     }
 
-    function addTask(title: string) {
-        const t: Task = { id: crypto.randomUUID(), title, done: false, createdAt: new Date().toISOString() }
-        setTasksByDay((prev) => ({ ...prev, [dayId]: [t, ...(prev[dayId] ?? [])] }))
-    }
-
-    function toggleTask(id: string) {
-        setTasksByDay((prev) => ({
-            ...prev,
-            [dayId]: (prev[dayId] ?? []).map((t) =>
-                t.id === id
-                    ? { ...t, done: !t.done, doneAt: !t.done ? new Date().toISOString() : undefined }
-                    : t
-            ),
-        }))
-    }
-
-    function deleteTask(id: string) {
-        setTasksByDay((prev) => ({
-            ...prev,
-            [dayId]: (prev[dayId] ?? []).filter((t) => t.id !== id),
-        }))
-    }
-
-    function updateTask(updated: Task) {
-        setTasksByDay((prev) => ({
-            ...prev,
-            [dayId]: (prev[dayId] ?? []).map((t) => t.id === updated.id ? updated : t),
-        }))
-    }
-
-    function updateWeeklyTask(updated: Task) {
-        setWeeks((prev) => {
-            const existing = prev[weekId]
-            if (!existing) return prev
-            return {
-                ...prev,
-                [weekId]: {
-                    ...existing,
-                    weeklyTasks: (existing.weeklyTasks ?? []).map((t) =>
-                        t.id === updated.id ? updated : t
-                    ),
-                },
-            }
-        })
-    }
-
-    function addWeeklyTask(title: string) {
-        const t: Task = { id: crypto.randomUUID(), title, done: false, createdAt: new Date().toISOString() }
-        setWeeks((prev) => {
-            const existing = prev[weekId]
-            return {
-                ...prev,
-                [weekId]: {
-                    ...existing,
-                    weeklyTasks: [t, ...(existing?.weeklyTasks ?? [])],
-                },
-            }
-        })
-    }
-
-    function toggleWeeklyTask(id: string) {
-        setWeeks((prev) => {
-            const existing = prev[weekId]
-            if (!existing) return prev
-            return {
-                ...prev,
-                [weekId]: {
-                    ...existing,
-                    weeklyTasks: (existing.weeklyTasks ?? []).map((t) =>
-                        t.id === id
-                            ? { ...t, done: !t.done, doneAt: !t.done ? new Date().toISOString() : undefined }
-                            : t
-                    ),
-                },
-            }
-        })
-    }
-
-    function deleteWeeklyTask(id: string) {
-        setWeeks((prev) => {
-            const existing = prev[weekId]
-            if (!existing) return prev
-            return {
-                ...prev,
-                [weekId]: {
-                    ...existing,
-                    weeklyTasks: (existing.weeklyTasks ?? []).filter((t) => t.id !== id),
-                },
-            }
-        })
-    }
-
     if (loading) {
         return (
             <main style={{ padding: '3rem', maxWidth: 700 }}>
@@ -648,25 +404,14 @@ export default function MorningFlow() {
             {/* Task review step — only appears in flow if yesterday had incomplete tasks */}
             {step === 'taskReview' && (
                 <TaskReviewStep
-                    yesterdayTasks={yesterdayIncompleteTasks}
+                    tasks={tasks}
+                    setTasks={setTasks}
                     yesterdayDayId={yesterdayId}
-                    weeklyTasks={weeklyTasks}
-                    todayTasks={todaysTasks}
-                    monthEntries={monthTaskEntries}
-                    onMoveYesterdayToToday={moveYesterdayToToday}
-                    onMoveYesterdayToWeek={moveYesterdayToWeek}
-                    onMoveYesterdayToMonth={moveYesterdayToMonth}
-                    onDismissYesterday={dismissYesterday}
-                    onMoveTodayToWeek={moveTodayToWeek}
-                    onMoveTodayToMonth={moveTodayToMonth}
-                    onMoveWeekToToday={moveWeekToToday}
-                    onMoveWeekToMonth={moveWeekToMonth}
-                    onMoveMonthToToday={pullEntryToDay}
-                    onMoveMonthToWeek={pullEntryToWeek}
+                    todayDayId={dayId}
+                    weekId={weekId}
                     onDone={next}
                 />
             )}
-
 
             {step === 'transition' && <TransitionStep onDone={next} />}
 
@@ -674,16 +419,10 @@ export default function MorningFlow() {
                 <TasksPage
                     weeklyTheme={weeklyTheme}
                     dailyAffirmation={dailyAffirmation}
-                    tasks={todaysTasks}
-                    onAddTask={addTask}
-                    onToggleTask={toggleTask}
-                    onDeleteTask={deleteTask}
-                    onUpdateTask={updateTask}
-                    weeklyTasks={weeklyTasks}
-                    onAddWeeklyTask={addWeeklyTask}
-                    onToggleWeeklyTask={toggleWeeklyTask}
-                    onDeleteWeeklyTask={deleteWeeklyTask}
-                    onUpdateWeeklyTask={updateWeeklyTask}
+                    tasks={tasks}
+                    setTasks={setTasks}
+                    dayId={dayId}
+                    weekId={weekId}
                     meals={todaysMeals}
                     onSetMeal={setSingleMeal}
                     onClearMeal={clearSingleMeal}
@@ -696,10 +435,6 @@ export default function MorningFlow() {
                     tracker={todaysTracker}
                     onTrackerChange={updateTracker}
                     calendarEntriesByDay={calendarEntriesByDay}
-                    todayDayId={dayId}
-                    currentWeekId={weekId}
-                    onPullEntryToDay={pullEntryToDay}
-                    onPullEntryToWeek={pullEntryToWeek}
                     showResetNudge={showResetNudge}
                     onOpenJournal={() => setShowJournal(true)}
                     onOpenCalendar={() => setShowCalendar(true)}
@@ -725,7 +460,8 @@ export default function MorningFlow() {
             {step === 'tasks' && showCalendar && (
                 <CalendarPage
                     weeks={weeks}
-                    tasksByDay={tasksByDay}
+                    tasks={tasks}
+                    setTasks={setTasks}
                     mealsByDay={mealsByDay}
                     journalByDay={journalByDay}
                     chatsByDay={chatsByDay}
@@ -746,25 +482,13 @@ export default function MorningFlow() {
                     onClose={() => setIsWeeklyResetOpen(false)}
                     journalByDay={journalByDay}
                     chatsByDay={chatsByDay}
-                    taskReviewProps={{
-                        yesterdayTasks: yesterdayIncompleteTasks,
-                        yesterdayDayId: yesterdayId,
-                        weeklyTasks,
-                        todayTasks: todaysTasks,
-                        monthEntries: monthTaskEntries,
-                        onMoveYesterdayToToday: moveYesterdayToToday,
-                        onMoveYesterdayToWeek: moveYesterdayToWeek,
-                        onMoveYesterdayToMonth: moveYesterdayToMonth,
-                        onDismissYesterday: dismissYesterday,
-                        onMoveTodayToWeek: moveTodayToWeek,
-                        onMoveTodayToMonth: moveTodayToMonth,
-                        onMoveWeekToToday: moveWeekToToday,
-                        onMoveWeekToMonth: moveWeekToMonth,
-                        onMoveMonthToToday: pullEntryToDay,
-                        onMoveMonthToWeek: pullEntryToWeek,
-                    }}
+                    tasks={tasks}
+                    setTasks={setTasks}
+                    todayDayId={dayId}
+                    yesterdayDayId={yesterdayId}
                 />
             )}
+
             {step === 'tasks' && showNotebooks && (
                 <NotebooksSection
                     notebooks={notebooks}
@@ -776,21 +500,11 @@ export default function MorningFlow() {
             {/* Standalone task review — accessible anytime from Tasks page */}
             {step === 'tasks' && showTaskReview && (
                 <TaskReviewStep
-                    yesterdayTasks={yesterdayIncompleteTasks}
+                    tasks={tasks}
+                    setTasks={setTasks}
                     yesterdayDayId={yesterdayId}
-                    weeklyTasks={weeklyTasks}
-                    todayTasks={todaysTasks}
-                    monthEntries={monthTaskEntries}
-                    onMoveYesterdayToToday={moveYesterdayToToday}
-                    onMoveYesterdayToWeek={moveYesterdayToWeek}
-                    onMoveYesterdayToMonth={moveYesterdayToMonth}
-                    onDismissYesterday={dismissYesterday}
-                    onMoveTodayToWeek={moveTodayToWeek}
-                    onMoveTodayToMonth={moveTodayToMonth}
-                    onMoveWeekToToday={moveWeekToToday}
-                    onMoveWeekToMonth={moveWeekToMonth}
-                    onMoveMonthToToday={pullEntryToDay}
-                    onMoveMonthToWeek={pullEntryToWeek}
+                    todayDayId={dayId}
+                    weekId={weekId}
                     onDone={() => setShowTaskReview(false)}
                     isStandalone
                 />
