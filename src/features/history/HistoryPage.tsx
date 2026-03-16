@@ -4,12 +4,13 @@ import type { Task } from '../tasks/tasks.types'
 import type { DailyMeals } from '../meals/meals.types'
 import type { WeekData } from '../morningFlow/morningFlow.types'
 import type { ChatMessage } from '../journal/journal.types'
+import { getTasksForDay, getTasksForWeek } from '../tasks/taskHelpers'
 
 type HistoryTab = 'day' | 'journal'
 
 type Props = {
     weeks: Record<string, WeekData>
-    tasksByDay: Record<string, Task[]>
+    tasks: Record<string, Task>
     mealsByDay: Record<string, DailyMeals>
     notesByDay: Record<string, string>
     journalByDay: Record<string, string>
@@ -81,7 +82,7 @@ function TaskListItem({ task, done }: { task: Task; done: boolean }) {
 
 export default function HistoryPage({
     weeks,
-    tasksByDay,
+    tasks,
     mealsByDay,
     notesByDay,
     journalByDay,
@@ -98,9 +99,9 @@ export default function HistoryPage({
     const dailyAffirmation = week?.affirmationsByDay?.[selectedDayId] ?? ''
     const weeklyTheme = week?.theme ?? '(no theme saved)'
     const reflections = week?.reflections ?? []
-    const weeklyTasks = week?.weeklyTasks ?? []
 
-    const dayTasks = tasksByDay[selectedDayId] ?? []
+    const dayTasks = getTasksForDay(tasks, selectedDayId)
+    const weeklyTasks = getTasksForWeek(tasks, weekId)
     const meals = mealsByDay[selectedDayId] ?? { snacks: [], drinks: [] }
     const note = notesByDay[selectedDayId] ?? ''
     const journal = journalByDay[selectedDayId] ?? ''

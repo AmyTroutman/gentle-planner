@@ -5,22 +5,20 @@ import type { DailyMeals } from '../meals/meals.types'
 import type { WeekData } from '../morningFlow/morningFlow.types'
 import type { ChatMessage } from '../journal/journal.types'
 import type { CalendarEntry, CalendarTag, DayTracker, TrackerTag } from './calendar.types'
+import { getTasksForDay, getMonthTasks, moveTaskToToday, moveTaskToWeek, addTask } from '../tasks/taskHelpers'
 import TrackerAside from './TrackerAside'
 
-// Only event and task are calendar entry tags now
-const TAG_OPTIONS: CalendarTag[] = ['event', 'task', 'game']
+const TAG_OPTIONS: CalendarTag[] = ['event', 'game']
 
 const TAG_COLORS: Record<CalendarTag, { bg: string; border: string; text: string }> = {
     event: { bg: '#e0f2fe', border: '#0ea5e9', text: '#0369a1' },
-    task: { bg: '#ede9fe', border: '#8b5cf6', text: '#6d28d9' },
     game: { bg: '#e9feea', border: '#00653e', text: '#004833' },
 }
 
 // Dot colors for calendar grid — entries + tracker data
 const ENTRY_DOT_COLORS: Record<CalendarTag, string> = {
     event: '#0ea5e9',
-    task: '#8b5cf6',
-    game: '#00653e'
+    game: '#00653e',
 }
 
 const TRACKER_DOT_COLORS: Record<TrackerTag, string> = {
@@ -32,7 +30,8 @@ const TRACKER_DOT_COLORS: Record<TrackerTag, string> = {
 
 type Props = {
     weeks: Record<string, WeekData>
-    tasksByDay: Record<string, Task[]>
+    tasks: Record<string, Task>
+    setTasks: (updater: Record<string, Task> | ((prev: Record<string, Task>) => Record<string, Task>)) => void
     mealsByDay: Record<string, DailyMeals>
     journalByDay: Record<string, string>
     chatsByDay: Record<string, ChatMessage[]>
@@ -145,7 +144,8 @@ function EntryForm({
 
 export default function CalendarPage({
     weeks,
-    tasksByDay,
+    tasks,
+    setTasks,
     mealsByDay,
     journalByDay,
     chatsByDay,
@@ -158,6 +158,7 @@ export default function CalendarPage({
     onClose,
 }: Props) {
     const todayId = getDayId(new Date())
+    const currentWeekId = getWeekId(new Date())
     const [selectedDayId, setSelectedDayId] = useState(todayId)
     const [viewYear, setViewYear] = useState(() => new Date().getFullYear())
     const [viewMonth, setViewMonth] = useState(() => new Date().getMonth())
@@ -195,7 +196,7 @@ export default function CalendarPage({
     // History data for selected day
     const weekId = useMemo(() => getWeekId(new Date(`${selectedDayId}T12:00:00`)), [selectedDayId])
     const week = weeks[weekId]
-    const dayTasks = tasksByDay[selectedDayId] ?? []
+    const dayTasks = getTasksForDay(tasks, selectedDayId)
     const meals = mealsByDay[selectedDayId]
     const journal = journalByDay[selectedDayId]
     const chat: ChatMessage[] = chatsByDay[selectedDayId] ?? []
@@ -203,15 +204,38 @@ export default function CalendarPage({
 
     const selectedTracker: DayTracker = trackersByDay[selectedDayId] ?? { period: false, symptoms: [], medications: false }
 
+    // Month tasks section
+    const allMonthTasks = getMonthTasks(tasks)
+    const openMonthTasks = allMonthTasks.filter(t => !t.done)
+    const viewMonthPrefix = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-`
+    const datedMonthTasks = openMonthTasks.filter(t => t.dueDate?.startsWith(viewMonthPrefix))
+    const undatedMonthTasks = openMonthTasks.filter(t => !t.dueDate)
+    const [undatedOpen, setUndatedOpen] = useState(false)
+    const [dayTab, setDayTab] = useState<'events' | 'tasks'>('events')
+    const [addingTask, setAddingTask] = useState(false)
+    const [newTaskTitle, setNewTaskTitle] = useState('')
+    const [newTaskDueDate, setNewTaskDueDate] = useState('')
+
+    function submitNewTask() {
+        const cleaned = newTaskTitle.trim()
+        if (!cleaned) return
+        setTasks(prev => addTask(prev, { scope: 'month', title: cleaned, dueDate: newTaskDueDate || undefined }))
+        setNewTaskTitle('')
+        setNewTaskDueDate('')
+        setAddingTask(false)
+    }
+
     function getDotsForDay(dayId: string): string[] {
         const dots: string[] = []
-        // Dots from calendar entries
         const entries = calendarEntriesByDay[dayId] ?? []
         const entryTags = new Set<CalendarTag>()
         for (const e of entries) for (const t of e.tags) entryTags.add(t)
         for (const tag of entryTags) dots.push(ENTRY_DOT_COLORS[tag])
 
-        // Dots from tracker data
+        // Dot for any month tasks with this dueDate
+        const hasMonthTask = Object.values(tasks).some(t => t.scope === 'month' && t.dueDate === dayId && !t.done)
+        if (hasMonthTask) dots.push('#8b5cf6')
+
         const tracker = trackersByDay[dayId]
         if (tracker) {
             if (tracker.period) dots.push(TRACKER_DOT_COLORS.period)
@@ -235,16 +259,23 @@ export default function CalendarPage({
         setEditingEntryId(null)
     }
 
-    function toggleEntryDone(entry: CalendarEntry) {
-        onUpdateEntry(selectedDayId, { ...entry, done: !entry.done })
-    }
-
     const selectedDate = new Date(`${selectedDayId}T12:00:00`)
     const selectedDateLabel = selectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
 
     const hasMeals = meals && (meals.breakfast || meals.lunch || meals.dinner || meals.snacks?.length || meals.drinks?.length)
     const openDayTasks = dayTasks.filter(t => !t.done)
     const doneDayTasks = dayTasks.filter(t => t.done)
+
+    const btnStyle = (color: string): React.CSSProperties => ({
+        padding: '0.2rem 0.55rem',
+        borderRadius: 8,
+        border: `1px solid ${color}`,
+        background: 'white',
+        color,
+        cursor: 'pointer',
+        fontSize: '0.78rem',
+        whiteSpace: 'nowrap',
+    })
 
     return (
         <section style={{ display: 'grid', gap: '1.5rem' }}>
@@ -341,81 +372,215 @@ export default function CalendarPage({
 
             {/* ── Day detail panel ── */}
             <div style={{ display: 'grid', gap: '1rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div>
-                        <h3 style={{ margin: 0 }}>{selectedDateLabel}</h3>
-                        {isFuture && <span style={{ fontSize: '0.82rem', color: '#0ea5e9', fontWeight: 600 }}>Future date</span>}
-                        {isPast && <span style={{ fontSize: '0.82rem', color: 'var(--muted)' }}>Past date</span>}
-                    </div>
-                    {!addingEntry && (
-                        <button
-                            onClick={() => setAddingEntry(true)}
-                            style={{ padding: '0.5rem 1rem', borderRadius: 10, border: '1px solid #2c454d', background: '#2c454d', color: 'white', cursor: 'pointer', fontSize: '0.9rem' }}
-                        >+ Add entry</button>
-                    )}
+                {/* Date heading */}
+                <div>
+                    <h3 style={{ margin: 0 }}>{selectedDateLabel}</h3>
+                    {isFuture && <span style={{ fontSize: '0.82rem', color: '#0ea5e9', fontWeight: 600 }}>Future date</span>}
+                    {isPast && <span style={{ fontSize: '0.82rem', color: 'var(--muted)' }}>Past date</span>}
                 </div>
 
-                {addingEntry && (
-                    <div style={{ padding: '1rem', borderRadius: 14, border: '1px solid #d1d5db', background: 'white' }}>
-                        <EntryForm onSave={handleAddEntry} onCancel={() => setAddingEntry(false)} />
-                    </div>
-                )}
-
-                {/* Calendar entries */}
-                {selectedEntries.length > 0 && (
-                    <div style={{ display: 'grid', gap: '0.6rem' }}>
-                        {selectedEntries.map(entry => (
-                            <div key={entry.id} style={{ padding: '0.75rem 1rem', borderRadius: 12, border: '1px solid #d1d5db', background: entry.done ? '#f9fafb' : 'white' }}>
-                                {editingEntryId === entry.id ? (
-                                    <EntryForm
-                                        initial={entry}
-                                        onSave={(data) => handleUpdateEntry(entry.id, data)}
-                                        onCancel={() => setEditingEntryId(null)}
-                                    />
-                                ) : (
-                                    <div style={{ display: 'grid', gap: '0.4rem' }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: 0 }}>
-                                                {entry.tags.includes('task') && (
-                                                    <input type="checkbox" checked={entry.done} onChange={() => toggleEntryDone(entry)} style={{ margin: 0, width: 16, height: 16, flexShrink: 0 }} />
-                                                )}
-                                                <span style={{ fontSize: '0.95rem', fontWeight: 500, textDecoration: entry.done ? 'line-through' : 'none', color: entry.done ? 'var(--muted)' : 'var(--text)' }}>
-                                                    {entry.title}
-                                                </span>
-                                            </div>
-                                            <div style={{ display: 'flex', gap: '0.4rem', flexShrink: 0 }}>
-                                                <button onClick={() => setEditingEntryId(entry.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: '0.85rem' }}>Edit</button>
-                                                <button onClick={() => onDeleteEntry(selectedDayId, entry.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#ef4444', fontSize: '0.85rem' }}>Delete</button>
-                                            </div>
-                                        </div>
-                                        {entry.tags.length > 0 && (
-                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem' }}>
-                                                {entry.tags.map(tag => {
-                                                    const c = TAG_COLORS[tag] ?? { bg: '#f3f4f6', border: '#d1d5db', text: '#6b7280' }
-                                                    return (
-                                                        <span key={tag} style={{ padding: '0.15rem 0.5rem', borderRadius: 20, background: c.bg, border: `1px solid ${c.border}`, color: c.text, fontSize: '0.75rem', fontWeight: 600 }}>
-                                                            {tag}
-                                                        </span>
-                                                    )
-                                                })}
-                                                {entry.movedTo && (
-                                                    <span style={{ padding: '0.15rem 0.5rem', borderRadius: 20, background: '#d1fae5', border: '1px solid #10b981', color: '#065f46', fontSize: '0.75rem', fontWeight: 600 }}>
-                                                        → {entry.movedTo === 'day' ? 'Today' : 'This Week'}
-                                                    </span>
-                                                )}
-                                            </div>
-                                        )}
-                                        {entry.notes && <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--muted)', whiteSpace: 'pre-wrap' }}>{entry.notes}</p>}
-                                    </div>
-                                )}
-                            </div>
+                {/* Tabs */}
+                <div style={{ display: 'grid', gap: '1rem' }}>
+                    <div style={{ display: 'flex', gap: '0.5rem', borderBottom: '1px solid #d1d5db', paddingBottom: '0' }}>
+                        {(['events', 'tasks'] as const).map(tab => (
+                            <button
+                                key={tab}
+                                onClick={() => setDayTab(tab)}
+                                style={{
+                                    padding: '0.45rem 1rem',
+                                    border: 'none',
+                                    borderBottom: dayTab === tab ? '2px solid #2c454d' : '2px solid transparent',
+                                    background: 'transparent',
+                                    color: dayTab === tab ? '#2c454d' : 'var(--muted)',
+                                    fontWeight: dayTab === tab ? 600 : 400,
+                                    cursor: 'pointer',
+                                    fontSize: '0.9rem',
+                                    marginBottom: '-1px',
+                                }}
+                            >
+                                {tab === 'events' ? 'Events' : 'Tasks'}
+                            </button>
                         ))}
                     </div>
-                )}
 
-                {selectedEntries.length === 0 && !addingEntry && (
-                    <p style={{ color: 'var(--muted)', margin: 0, fontSize: '0.9rem' }}>No calendar entries for this day.</p>
-                )}
+                    {/* Events tab */}
+                    {dayTab === 'events' && (
+                        <div style={{ display: 'grid', gap: '0.75rem' }}>
+
+                            {selectedEntries.length > 0 && (
+                                <div style={{ display: 'grid', gap: '0.6rem' }}>
+                                    {selectedEntries.map(entry => (
+                                        <div key={entry.id} style={{ padding: '0.75rem 1rem', borderRadius: 12, border: '1px solid #d1d5db', background: entry.done ? '#f9fafb' : 'white' }}>
+                                            {editingEntryId === entry.id ? (
+                                                <EntryForm
+                                                    initial={entry}
+                                                    onSave={(data) => handleUpdateEntry(entry.id, data)}
+                                                    onCancel={() => setEditingEntryId(null)}
+                                                />
+                                            ) : (
+                                                <div style={{ display: 'grid', gap: '0.4rem' }}>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem' }}>
+                                                        <span style={{ fontSize: '0.95rem', fontWeight: 500, color: entry.done ? 'var(--muted)' : 'var(--text)' }}>
+                                                            {entry.title}
+                                                        </span>
+                                                        <div style={{ display: 'flex', gap: '0.4rem', flexShrink: 0 }}>
+                                                            <button onClick={() => setEditingEntryId(entry.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: '0.85rem' }}>Edit</button>
+                                                            <button onClick={() => onDeleteEntry(selectedDayId, entry.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#ef4444', fontSize: '0.85rem' }}>Delete</button>
+                                                        </div>
+                                                    </div>
+                                                    {entry.tags.length > 0 && (
+                                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem' }}>
+                                                            {entry.tags.map(tag => {
+                                                                const c = TAG_COLORS[tag] ?? { bg: '#f3f4f6', border: '#d1d5db', text: '#6b7280' }
+                                                                return (
+                                                                    <span key={tag} style={{ padding: '0.15rem 0.5rem', borderRadius: 20, background: c.bg, border: `1px solid ${c.border}`, color: c.text, fontSize: '0.75rem', fontWeight: 600 }}>
+                                                                        {tag}
+                                                                    </span>
+                                                                )
+                                                            })}
+                                                        </div>
+                                                    )}
+                                                    {entry.notes && <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--muted)', whiteSpace: 'pre-wrap' }}>{entry.notes}</p>}
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            {selectedEntries.length === 0 && !addingEntry && (
+                                <p style={{ color: 'var(--muted)', margin: 0, fontSize: '0.9rem' }}>No calendar entries for this day.</p>
+                            )}
+
+                            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                                {!addingEntry && (
+                                    <button
+                                        onClick={() => setAddingEntry(true)}
+                                        style={{ padding: '0.5rem 1rem', borderRadius: 10, border: '1px solid #2c454d', background: '#2c454d', color: 'white', cursor: 'pointer', fontSize: '0.9rem' }}
+                                    >+ Add entry</button>
+                                )}
+                            </div>
+
+                            {addingEntry && (
+                                <div style={{ padding: '1rem', borderRadius: 14, border: '1px solid #d1d5db', background: 'white' }}>
+                                    <EntryForm onSave={handleAddEntry} onCancel={() => setAddingEntry(false)} />
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Tasks tab */}
+                    {dayTab === 'tasks' && (
+                        <div style={{ display: 'grid', gap: '0.75rem' }}>
+                            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                                {!addingTask && (
+                                    <button
+                                        onClick={() => setAddingTask(true)}
+                                        style={{ padding: '0.5rem 1rem', borderRadius: 10, border: '1px solid #2c454d', background: '#2c454d', color: 'white', cursor: 'pointer', fontSize: '0.9rem' }}
+                                    >+ Add task</button>
+                                )}
+                            </div>
+
+                            {addingTask && (
+                                <div style={{ padding: '1rem', borderRadius: 14, border: '1px solid #d1d5db', background: 'white', display: 'grid', gap: '0.75rem' }}>
+                                    <input
+                                        autoFocus
+                                        value={newTaskTitle}
+                                        onChange={(e) => setNewTaskTitle(e.target.value)}
+                                        onKeyDown={(e) => { if (e.key === 'Enter') submitNewTask() }}
+                                        placeholder="Task title…"
+                                        style={{ padding: '0.6rem 0.75rem', borderRadius: 10, border: '1px solid #d1d5db', fontSize: '0.95rem', fontFamily: 'inherit' }}
+                                    />
+                                    <input
+                                        type="date"
+                                        value={newTaskDueDate}
+                                        onChange={(e) => setNewTaskDueDate(e.target.value)}
+                                        style={{ padding: '0.6rem 0.75rem', borderRadius: 10, border: '1px solid #d1d5db', fontSize: '0.9rem', fontFamily: 'inherit' }}
+                                    />
+                                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                        <button
+                                            onClick={submitNewTask}
+                                            disabled={!newTaskTitle.trim()}
+                                            style={{ padding: '0.55rem 1.1rem', borderRadius: 10, border: '1px solid #2c454d', background: '#2c454d', color: 'white', cursor: newTaskTitle.trim() ? 'pointer' : 'default', opacity: newTaskTitle.trim() ? 1 : 0.5, fontSize: '0.9rem' }}
+                                        >Save</button>
+                                        <button
+                                            onClick={() => { setAddingTask(false); setNewTaskTitle(''); setNewTaskDueDate('') }}
+                                            style={{ padding: '0.55rem 1.1rem', borderRadius: 10, border: '1px solid #d1d5db', background: 'white', cursor: 'pointer', fontSize: '0.9rem' }}
+                                        >Cancel</button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {(datedMonthTasks.length > 0 || undatedMonthTasks.length > 0) ? (
+                                <div style={{ padding: '1rem', borderRadius: 14, border: '1px solid #d1d5db', background: 'white' }}>
+                                    <h4 style={{ margin: '0 0 0.75rem', fontSize: '0.95rem', color: '#2c454d' }}>This Month's Tasks</h4>
+
+                                    {datedMonthTasks.length > 0 && (
+                                        <div style={{ display: 'grid', gap: '0.5rem', marginBottom: undatedMonthTasks.length > 0 ? '0.75rem' : 0 }}>
+                                            {datedMonthTasks.map(task => (
+                                                <div key={task.id} style={{
+                                                    display: 'flex', alignItems: 'center', gap: '0.5rem',
+                                                    padding: '0.5rem 0.65rem', borderRadius: 10,
+                                                    border: '1px solid #d1d5db', background: '#fafafa',
+                                                }}>
+                                                    <span style={{ flex: 1, fontSize: '0.9rem' }}>{task.title}</span>
+                                                    <input
+                                                        type="date"
+                                                        value={task.dueDate ?? ''}
+                                                        onChange={(e) => setTasks(prev => ({
+                                                            ...prev,
+                                                            [task.id]: { ...prev[task.id], dueDate: e.target.value || undefined },
+                                                        }))}
+                                                        style={{ padding: '0.2rem 0.4rem', borderRadius: 8, border: '1px solid #d1d5db', fontSize: '0.8rem' }}
+                                                    />
+                                                    <button style={btnStyle('#2c454d')} onClick={() => setTasks(prev => moveTaskToToday(prev, task.id, todayId, currentWeekId))}>→ Today</button>
+                                                    <button style={btnStyle('#6366f1')} onClick={() => setTasks(prev => moveTaskToWeek(prev, task.id, currentWeekId))}>→ Week</button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {undatedMonthTasks.length > 0 && (
+                                        <div>
+                                            <button
+                                                onClick={() => setUndatedOpen(o => !o)}
+                                                style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: '0.85rem', padding: 0, marginBottom: '0.5rem' }}
+                                            >
+                                                No date yet ({undatedMonthTasks.length}) {undatedOpen ? '▲' : '▼'}
+                                            </button>
+                                            {undatedOpen && (
+                                                <div style={{ display: 'grid', gap: '0.5rem' }}>
+                                                    {undatedMonthTasks.map(task => (
+                                                        <div key={task.id} style={{
+                                                            display: 'flex', alignItems: 'center', gap: '0.5rem',
+                                                            padding: '0.5rem 0.65rem', borderRadius: 10,
+                                                            border: '1px solid #d1d5db', background: '#fafafa',
+                                                        }}>
+                                                            <span style={{ flex: 1, fontSize: '0.9rem' }}>{task.title}</span>
+                                                            <input
+                                                                type="date"
+                                                                value={task.dueDate ?? ''}
+                                                                onChange={(e) => setTasks(prev => ({
+                                                                    ...prev,
+                                                                    [task.id]: { ...prev[task.id], dueDate: e.target.value || undefined },
+                                                                }))}
+                                                                style={{ padding: '0.2rem 0.4rem', borderRadius: 8, border: '1px solid #d1d5db', fontSize: '0.8rem' }}
+                                                            />
+                                                            <button style={btnStyle('#2c454d')} onClick={() => setTasks(prev => moveTaskToToday(prev, task.id, todayId, currentWeekId))}>→ Today</button>
+                                                            <button style={btnStyle('#6366f1')} onClick={() => setTasks(prev => moveTaskToWeek(prev, task.id, currentWeekId))}>→ Week</button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            ) : (
+                                <p style={{ color: 'var(--muted)', margin: 0, fontSize: '0.9rem' }}>No month tasks for this period.</p>
+                            )}
+                        </div>
+                    )}
+                </div>
 
                 {/* Tracker — editable for any day */}
                 <div style={{ padding: '1rem', borderRadius: 14, border: '1px solid #d1d5db', background: 'white' }}>

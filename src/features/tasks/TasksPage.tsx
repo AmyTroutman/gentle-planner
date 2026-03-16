@@ -12,19 +12,10 @@ type Props = {
     weeklyTheme: string
     dailyAffirmation: string
 
-    // Today tasks
-    tasks: Task[]
-    onAddTask: (title: string) => void
-    onToggleTask: (id: string) => void
-    onDeleteTask: (id: string) => void
-    onUpdateTask: (task: Task) => void
-
-    // Weekly tasks
-    weeklyTasks: Task[]
-    onAddWeeklyTask: (title: string) => void
-    onToggleWeeklyTask: (id: string) => void
-    onDeleteWeeklyTask: (id: string) => void
-    onUpdateWeeklyTask: (task: Task) => void
+    tasks: Record<string, Task>
+    setTasks: (updater: (prev: Record<string, Task>) => Record<string, Task>) => void
+    dayId: string
+    weekId: string
 
     // Meals
     meals: DailyMeals
@@ -43,12 +34,8 @@ type Props = {
     tracker: DayTracker
     onTrackerChange: (updated: DayTracker) => void
 
-    // Monthly calendar entries
+    // Calendar entries (for events/games still shown in monthly box)
     calendarEntriesByDay: Record<string, CalendarEntry[]>
-    todayDayId: string
-    currentWeekId: string
-    onPullEntryToDay: (entry: CalendarEntry, fromDayId: string) => void
-    onPullEntryToWeek: (entry: CalendarEntry, weekId: string) => void
 
     // Weekly reset nudge
     showResetNudge: boolean
@@ -93,16 +80,9 @@ export default function TasksPage({
     dailyAffirmation,
 
     tasks,
-    onAddTask,
-    onToggleTask,
-    onDeleteTask,
-    onUpdateTask,
-
-    weeklyTasks,
-    onAddWeeklyTask,
-    onToggleWeeklyTask,
-    onDeleteWeeklyTask,
-    onUpdateWeeklyTask,
+    setTasks,
+    dayId,
+    weekId,
 
     meals,
     onSetMeal,
@@ -116,10 +96,6 @@ export default function TasksPage({
     onTrackerChange,
 
     calendarEntriesByDay,
-    todayDayId,
-    currentWeekId,
-    onPullEntryToDay,
-    onPullEntryToWeek,
 
     showResetNudge,
 
@@ -191,40 +167,33 @@ export default function TasksPage({
                     <Card title="Today">
                         <TodayTasks
                             tasks={tasks}
-                            onAdd={onAddTask}
-                            onToggle={onToggleTask}
-                            onDelete={onDeleteTask}
-                            onUpdate={onUpdateTask}
+                            setTasks={setTasks}
+                            dayId={dayId}
+                            weekId={weekId}
                         />
                     </Card>
 
                     <Card title="This Week">
                         <WeeklyTasks
-                            tasks={weeklyTasks}
-                            onAdd={onAddWeeklyTask}
-                            onToggle={onToggleWeeklyTask}
-                            onDelete={onDeleteWeeklyTask}
-                            onUpdate={onUpdateWeeklyTask}
+                            tasks={tasks}
+                            setTasks={setTasks}
+                            weekId={weekId}
                         />
                     </Card>
 
                     <Card title="This Month">
                         <MonthlyTaskBox
+                            tasks={tasks}
+                            setTasks={setTasks}
                             calendarEntriesByDay={calendarEntriesByDay}
-                            currentWeekId={currentWeekId}
-                            todayDayId={todayDayId}
-                            onPullToDay={onPullEntryToDay}
-                            onPullToWeek={onPullEntryToWeek}
+                            dayId={dayId}
+                            weekId={weekId}
                         />
                     </Card>
                 </div>
 
                 {/* Aside */}
                 <div style={{ display: 'grid', gap: '1.25rem', alignContent: 'start' }}>
-                    {/* <Card title="Notes">
-                        <NotesSection note={note} onChange={onNoteChange} />
-                    </Card> */}
-
                     <aside
                         style={{
                             padding: '1rem',

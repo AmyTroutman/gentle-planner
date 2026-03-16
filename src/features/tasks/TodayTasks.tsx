@@ -1,30 +1,36 @@
 import { useMemo, useState } from 'react'
 import type { Task } from './tasks.types'
+import { getTasksForDay, addTask, toggleTask, deleteTask } from './taskHelpers'
 import TaskItem from './TaskItem'
 
 type Props = {
-    tasks: Task[]
-    onAdd: (title: string) => void
-    onToggle: (id: string) => void
-    onDelete: (id: string) => void
-    onUpdate: (task: Task) => void
+    tasks: Record<string, Task>
+    setTasks: (updater: (prev: Record<string, Task>) => Record<string, Task>) => void
+    dayId: string
+    weekId: string
 }
 
-export default function TodayTasks({ tasks, onAdd, onToggle, onDelete, onUpdate }: Props) {
+export default function TodayTasks({ tasks, setTasks, dayId, weekId }: Props) {
     const [title, setTitle] = useState('')
+
+    const dayTasks = useMemo(() => getTasksForDay(tasks, dayId), [tasks, dayId])
 
     const { openTasks, doneTasks } = useMemo(() => {
         const open: Task[] = []
         const done: Task[] = []
-        for (const t of tasks) (t.done ? done : open).push(t)
+        for (const t of dayTasks) (t.done ? done : open).push(t)
         return { openTasks: open, doneTasks: done }
-    }, [tasks])
+    }, [dayTasks])
 
     function submit() {
         const cleaned = title.trim()
         if (!cleaned) return
-        onAdd(cleaned)
+        setTasks(prev => addTask(prev, { scope: 'today', dayId, weekId, title: cleaned }))
         setTitle('')
+    }
+
+    function handleUpdate(updated: Task) {
+        setTasks(prev => ({ ...prev, [updated.id]: updated }))
     }
 
     return (
@@ -68,9 +74,9 @@ export default function TodayTasks({ tasks, onAdd, onToggle, onDelete, onUpdate 
                         <TaskItem
                             key={t.id}
                             task={t}
-                            onToggle={() => onToggle(t.id)}
-                            onDelete={() => onDelete(t.id)}
-                            onUpdate={onUpdate}
+                            onToggle={() => setTasks(prev => toggleTask(prev, t.id))}
+                            onDelete={() => setTasks(prev => deleteTask(prev, t.id))}
+                            onUpdate={handleUpdate}
                         />
                     ))}
                 </ul>
@@ -86,9 +92,9 @@ export default function TodayTasks({ tasks, onAdd, onToggle, onDelete, onUpdate 
                             <TaskItem
                                 key={t.id}
                                 task={t}
-                                onToggle={() => onToggle(t.id)}
-                                onDelete={() => onDelete(t.id)}
-                                onUpdate={onUpdate}
+                                onToggle={() => setTasks(prev => toggleTask(prev, t.id))}
+                                onDelete={() => setTasks(prev => deleteTask(prev, t.id))}
+                                onUpdate={handleUpdate}
                             />
                         ))}
                     </ul>
