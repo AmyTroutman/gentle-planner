@@ -58,9 +58,11 @@ export default function MorningFlow() {
 
     const [step, setStep] = useState<MorningStep>('greeting')
     const [stepInitialized, setStepInitialized] = useState(false)
+    const [flowHasTaskReview, setFlowHasTaskReview] = useState(false)
 
     useEffect(() => {
         if (loading || stepInitialized) return
+        setFlowHasTaskReview(hasYesterdayTasks)
         if (hasCompletedMorningFlow) {
             setStep('tasks')
         } else {
@@ -269,8 +271,7 @@ export default function MorningFlow() {
     function next() {
         const order: MorningStep[] = [
             'greeting', 'theme', 'affirmation', 'breakfast',
-            // taskReview inserted here only if yesterday had incomplete tasks
-            ...(hasYesterdayTasks ? ['taskReview' as MorningStep] : []),
+            ...(flowHasTaskReview ? ['taskReview' as MorningStep] : []),
             'transition', 'tasks',
         ]
         const currentIndex = order.indexOf(step)
