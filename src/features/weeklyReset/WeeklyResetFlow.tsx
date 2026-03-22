@@ -8,23 +8,21 @@ import { getTasksForWeek } from '../tasks/taskHelpers'
 import WrenSidebar from './WrenSidebar'
 import TaskReviewStep from '../tasks/TaskReviewStep'
 
-// ─── Helper types ────────────────────────────────────────────────────────────
+// ─── Helper types ─────────────────────────────────────────────────────────────
 
 type Props = {
     weeks: WeeksMap
     setWeeks: (updater: WeeksMap | ((prev: WeeksMap) => WeeksMap)) => void
     onClose: () => void
-    // Context passed from MorningFlow for Wren
     journalByDay: Record<string, string>
     chatsByDay: Record<string, ChatMessage[]>
-    // Tasks
     tasks: Record<string, Task>
     setTasks: (updater: Record<string, Task> | ((prev: Record<string, Task>) => Record<string, Task>)) => void
     todayDayId: string
     yesterdayDayId: string
 }
 
-// ─── Firestore helpers ───────────────────────────────────────────────────────
+// ─── Firestore helpers ────────────────────────────────────────────────────────
 
 function createDefaultWeeklyReset(): WeeklyResetData {
     return { completed: false, lookback: {}, taskDecisions: {}, wrenChat: [] }
@@ -117,17 +115,35 @@ function updateWrenChat(prev: WeeksMap, weekId: string, messages: ChatMessage[])
 const STEP_LABELS: Record<WeeklyResetStep, string> = {
     intro: 'Opening',
     lookback: 'Looking back',
-    tasks: 'Tasks',
     theme: 'Theme',
+    tasks: 'Tasks',
     complete: 'Done',
 }
 
-// ─── Dot progress ────────────────────────────────────────────────────────────
+// ─── Dot progress ─────────────────────────────────────────────────────────────
 
-function StepDots({ current }: { current: WeeklyResetStep }) {
-    const steps: WeeklyResetStep[] = ['lookback', 'tasks', 'theme']
+function StepDots({ current, onBack }: { current: WeeklyResetStep; onBack: () => void }) {
+    const steps: WeeklyResetStep[] = ['lookback', 'theme', 'tasks']
+    const showBack = steps.includes(current) && current !== 'lookback'
+
     return (
-        <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center' }}>
+            {showBack && (
+                <button
+                    onClick={onBack}
+                    style={{
+                        background: 'transparent',
+                        border: 'none',
+                        color: 'var(--muted)',
+                        cursor: 'pointer',
+                        fontSize: '0.8rem',
+                        padding: '0 0.25rem 0 0',
+                        lineHeight: 1,
+                    }}
+                >
+                    ←
+                </button>
+            )}
             {steps.map((s) => {
                 const idx = steps.indexOf(s)
                 const curIdx = steps.indexOf(current)
@@ -211,14 +227,11 @@ export default function WeeklyResetFlow({ weeks, setWeeks, onClose, journalByDay
     const [step, setStep] = useState<WeeklyResetStep>('intro')
     const [pendingNext, setPendingNext] = useState(false)
 
-    // Confirm panel open states
     const [lookbackOpen, setLookbackOpen] = useState(false)
     const [themeOpen, setThemeOpen] = useState(false)
 
-    // Wren chat messages (persisted to Firestore)
     const wrenChat: ChatMessage[] = weeklyReset?.wrenChat ?? []
 
-    // Build prev-week day IDs for Wren context
     const prevWeekDayIds = useMemo(() => {
         const ids: string[] = []
         const start = new Date(prevWeekId)
@@ -266,23 +279,29 @@ export default function WeeklyResetFlow({ weeks, setWeeks, onClose, journalByDay
     function advanceStep() {
         setPendingNext(false)
         if (step === 'intro') { begin(); return }
-        if (step === 'lookback') { setStep('tasks'); return }
-        if (step === 'tasks') { setStep('theme'); return }
-        if (step === 'theme') { finish(); return }
+        if (step === 'lookback') { setStep('theme'); return }
+        if (step === 'theme') { setStep('tasks'); return }
+        if (step === 'tasks') { finish();  return }
         if (step === 'complete') { onClose(); return }
     }
 
-    function skipThisStep() {
+    function goBack() {
         setPendingNext(false)
-        if (step === 'intro') return onClose()
-        if (step === 'lookback') return setStep('tasks')
-        if (step === 'tasks') return setStep('theme')
-        if (step === 'theme') return finish()
+        if (step === 'lookback') { setStep('intro'); return }
+        if (step === 'theme') { setStep('lookback'); return }
+        if (step === 'tasks') { setStep('theme'); return }
+    }
+
+    function continueStep() {
+        setPendingNext(false)
+        if (step === 'lookback') { setStep('theme'); return }
+        if (step === 'theme') { setStep('tasks'); return }
+        if (step === 'tasks') { finish(); return }
     }
 
     function finish() {
         setWeeks((prev) => markWeeklyResetCompleted(prev, weekId, false))
-        setStep('complete')
+        onClose()
     }
 
     if (!week) {
@@ -294,7 +313,6 @@ export default function WeeklyResetFlow({ weeks, setWeeks, onClose, journalByDay
     }
 
     const r = weeklyReset ?? createDefaultWeeklyReset()
-
     const showDots = step !== 'intro' && step !== 'complete'
 
     return (
@@ -309,7 +327,7 @@ export default function WeeklyResetFlow({ weeks, setWeeks, onClose, journalByDay
             {/* ── Left: reset content ───────────────────────────── */}
             <div style={{
                 display: 'grid',
-                gridTemplateRows: 'auto 1fr auto',
+                gridTemplateRows: 'auto 1fr',
                 gap: '1rem',
                 minHeight: 0,
                 overflowY: 'auto',
@@ -324,7 +342,7 @@ export default function WeeklyResetFlow({ weeks, setWeeks, onClose, journalByDay
                 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                         <h2 style={{ margin: 0, fontSize: '1.15rem', color: '#2c454d' }}>Weekly Reset</h2>
-                        {showDots && <StepDots current={step} />}
+                        {showDots && <StepDots current={step} onBack={goBack} />}
                     </div>
                     <button
                         onClick={onClose}
@@ -412,22 +430,10 @@ export default function WeeklyResetFlow({ weeks, setWeeks, onClose, journalByDay
                                     </label>
                                 </div>
                             </ConfirmPanel>
-                            <button onClick={skipThisStep} style={{ alignSelf: 'start', background: 'transparent', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: '0.82rem', padding: 0 }}>
-                                Skip →
+                            <button onClick={continueStep} style={{ alignSelf: 'start', background: 'transparent', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: '0.82rem', padding: 0 }}>
+                                Continue →
                             </button>
                         </div>
-                    )}
-
-                    {step === 'tasks' && (
-                        <TaskReviewStep
-                            tasks={tasks}
-                            setTasks={setTasks}
-                            yesterdayDayId={yesterdayDayId}
-                            todayDayId={todayDayId}
-                            weekId={weekId}
-                            onDone={() => setStep('theme')}
-                            isStandalone={false}
-                        />
                     )}
 
                     {step === 'theme' && (
@@ -468,33 +474,22 @@ export default function WeeklyResetFlow({ weeks, setWeeks, onClose, journalByDay
                                     </label>
                                 </div>
                             </ConfirmPanel>
-                            <button onClick={skipThisStep} style={{ alignSelf: 'start', background: 'transparent', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: '0.82rem', padding: 0 }}>
-                                Skip →
+                            <button onClick={continueStep} style={{ alignSelf: 'start', background: 'transparent', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: '0.82rem', padding: 0 }}>
+                                Continue →
                             </button>
                         </div>
                     )}
 
-                    {step === 'complete' && (
-                        <div style={{ display: 'grid', gap: '1rem', paddingTop: '1rem' }}>
-                            <p style={{ margin: 0, color: 'var(--muted)', fontSize: '0.95rem', lineHeight: 1.6 }}>
-                                Reset complete. You're ready for the week.
-                            </p>
-                            <button
-                                onClick={onClose}
-                                style={{
-                                    padding: '0.6rem 1.25rem',
-                                    borderRadius: 10,
-                                    border: 'none',
-                                    background: '#2c454d',
-                                    color: 'white',
-                                    cursor: 'pointer',
-                                    fontSize: '0.9rem',
-                                    justifySelf: 'start',
-                                }}
-                            >
-                                Close
-                            </button>
-                        </div>
+                    {step === 'tasks' && (
+                        <TaskReviewStep
+                            tasks={tasks}
+                            setTasks={setTasks}
+                            yesterdayDayId={yesterdayDayId}
+                            todayDayId={todayDayId}
+                            weekId={weekId}
+                            onDone={finish}
+                            isStandalone={false}
+                        />
                     )}
                 </div>
             </div>

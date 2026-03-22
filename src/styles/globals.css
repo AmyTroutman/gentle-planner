@@ -3,6 +3,12 @@
     --text: #1f2933;
     --muted: #6b7280;
     --accent: #4b5563;
+    --surface: #f3f4f6;
+
+    --journal-bg: #f8f5eb;
+    --journal-border: #dbc88a;
+    --journal-text: #7a5c2e;
+    --journal-muted: #a07840;
 }
 
 * {
@@ -44,11 +50,167 @@ input,
 textarea {
     font-family: inherit;
     font-size: 1rem;
-
     width: 100%;
     padding: 0.75rem;
     border-radius: 12px;
     border: 1px solid #d1d5db;
-
     background: white;
+}
+
+/* Journal tabs */
+.journal-tab-layout {
+    display: flex;
+    align-items: flex-start;
+}
+
+.journal-side-tabs {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    padding-top: 2px;
+}
+
+.journal-side-tab {
+    padding: 9px 16px;
+    font-size: 0.85rem;
+    background: var(--surface);
+    color: var(--muted);
+    border: 0.5px solid #d1d5db;
+    border-right: none;
+    border-radius: 6px 0 0 6px;
+    font-weight: 400;
+    text-align: right;
+    white-space: nowrap;
+    position: relative;
+    right: -0.5px;
+    z-index: 0;
+    transition: background 0.15s, color 0.15s;
+}
+
+.journal-side-tab:hover:not(.active) {
+    background: white;
+    color: var(--text);
+}
+
+.journal-side-tab.active {
+    background: var(--journal-bg);
+    color: var(--journal-text);
+    border-color: var(--journal-border);
+    font-weight: 500;
+    z-index: 2;
+}
+
+.journal-panel {
+    flex: 1;
+    background: var(--journal-bg);
+    border: 0.5px solid var(--journal-border);
+    border-radius: 0 10px 10px 10px;
+    padding: 1.25rem 1.5rem;
+    position: relative;
+    z-index: 1;
+    min-height: 300px;
+}
+
+/* Folder tabs */
+.folder-tab-layout {
+    display: flex;
+    flex-direction: column;
+}
+
+.folder-tabs {
+    display: flex;
+    align-items: flex-end;
+    gap: 3px;
+}
+
+.folder-tab {
+    padding: 7px 18px;
+    font-size: 0.85rem;
+    background: var(--surface);
+    color: var(--muted);
+    border: 0.5px solid #d1d5db;
+    border-bottom: none;
+    border-radius: 6px 6px 0 0;
+    font-weight: 400;
+    white-space: nowrap;
+    position: relative;
+    bottom: -0.5px;
+    z-index: 0;
+    transition: background 0.15s, color 0.15s;
+}
+
+.folder-tab:hover:not(.active) {
+    background: white;
+    color: var(--text);
+}
+
+.folder-tab.active {
+    background: white;
+    color: var(--text);
+    border-color: #d1d5db;
+    font-weight: 500;
+    z-index: 2;
+}
+
+.folder-panel {
+    background: white;
+    border: 0.5px solid #d1d5db;
+    border-radius: 0 10px 10px 10px;
+    padding: 1.25rem 1.5rem;
+    position: relative;
+    z-index: 1;
+    min-height: 300px;
+}
+
+/* Month side tabs */
+.month-tab-layout {
+    display: flex;
+    align-items: flex-start;
+}
+
+.month-side-tabs {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    padding-top: 2px;
+}
+
+.month-side-tab {
+    padding: 9px 16px;
+    font-size: 0.85rem;
+    background: var(--surface);
+    color: var(--muted);
+    border: 0.5px solid #d1d5db;
+    border-right: none;
+    border-radius: 6px 0 0 6px;
+    font-weight: 400;
+    text-align: right;
+    white-space: nowrap;
+    position: relative;
+    right: -0.5px;
+    z-index: 0;
+    transition: background 0.15s, color 0.15s;
+}
+
+.month-side-tab:hover:not(.active) {
+    background: white;
+    color: var(--text);
+}
+
+.month-side-tab.active {
+    background: white;
+    color: var(--text);
+    border-color: #d1d5db;
+    font-weight: 500;
+    z-index: 2;
+}
+
+.month-panel {
+    flex: 1;
+    background: white;
+    border: 0.5px solid #d1d5db;
+    border-radius: 0 10px 10px 10px;
+    padding: 1.25rem 1.5rem;
+    position: relative;
+    z-index: 1;
 }

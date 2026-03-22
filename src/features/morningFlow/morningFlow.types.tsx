@@ -7,6 +7,7 @@ export type MorningStep =
     | 'affirmation'
     | 'breakfast'
     | 'taskReview'
+    | 'weeklyReset'
     | 'transition'
     | 'tasks'
 

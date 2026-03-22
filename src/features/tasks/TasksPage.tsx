@@ -37,9 +37,6 @@ type Props = {
     // Calendar entries (for events/games still shown in monthly box)
     calendarEntriesByDay: Record<string, CalendarEntry[]>
 
-    // Weekly reset nudge
-    showResetNudge: boolean
-
     // Nav
     onOpenJournal: () => void
     onOpenCalendar: () => void
@@ -97,8 +94,6 @@ export default function TasksPage({
 
     calendarEntriesByDay,
 
-    showResetNudge,
-
     onOpenJournal,
     onOpenCalendar,
     onOpenWeeklyReset,
@@ -126,40 +121,6 @@ export default function TasksPage({
                     <button onClick={onOpenTaskReview} style={navButtonStyle}>Review Tasks</button>
                 </div>
             </header>
-
-            {/* Sunday nudge banner */}
-            {showResetNudge && (
-                <div
-                    style={{
-                        padding: '0.85rem 1rem',
-                        borderRadius: 12,
-                        border: '1px solid #e9d5a1',
-                        background: '#fefce8',
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        gap: '1rem',
-                    }}
-                >
-                    <span style={{ fontSize: '0.95rem', lineHeight: 1.4 }}>
-                        ✦ It's Sunday — a good day to do your weekly reset.
-                    </span>
-                    <button
-                        onClick={onOpenWeeklyReset}
-                        style={{
-                            padding: '0.5rem 0.9rem',
-                            borderRadius: 10,
-                            border: '1px solid #d4a827',
-                            background: 'white',
-                            cursor: 'pointer',
-                            fontSize: '0.9rem',
-                            whiteSpace: 'nowrap',
-                        }}
-                    >
-                        Let's do it
-                    </button>
-                </div>
-            )}
 
             <div className={styles.tasksLayout}>
                 {/* Main column */}

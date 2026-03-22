@@ -45,13 +45,9 @@ export default function MorningFlow() {
         trackersByDay, setTrackersByDay,
     } = useUserDoc()
 
-    const weekHasTheme = Boolean(weeks[weekId]?.theme?.trim())
     const hasCompletedMorningFlow = Boolean(mealsByDay[dayId]?.breakfast)
 
-    // Sunday nudge: show if today is Sunday and this week's reset isn't done
     const isSunday = new Date().getDay() === 0
-    const weeklyResetDone = Boolean((weeks[weekId] as any)?.weeklyReset?.completed)
-    const showResetNudge = isSunday && !weeklyResetDone
 
     // Yesterday's incomplete daily tasks — drives whether taskReview appears in flow
     const hasYesterdayTasks = getYesterdayIncompleteTasks(tasks, yesterdayId).length > 0
@@ -68,12 +64,8 @@ export default function MorningFlow() {
         } else {
             setStep('greeting')
         }
-        // Open weekly reset automatically if no theme yet
-        if (!weekHasTheme) {
-            setIsWeeklyResetOpen(true)
-        }
         setStepInitialized(true)
-    }, [loading, stepInitialized, weekHasTheme, hasCompletedMorningFlow])
+    }, [loading, stepInitialized, hasCompletedMorningFlow])
 
     const [showCalendar, setShowCalendar] = useState(false)
     const [showJournal, setShowJournal] = useState(false)
@@ -269,11 +261,13 @@ export default function MorningFlow() {
     }
 
     function next() {
-        const order: MorningStep[] = [
-            'greeting', 'theme', 'affirmation', 'breakfast',
-            ...(flowHasTaskReview ? ['taskReview' as MorningStep] : []),
-            'transition', 'tasks',
-        ]
+        const order: MorningStep[] = isSunday
+            ? ['greeting', 'affirmation', 'breakfast', 'weeklyReset', 'transition', 'tasks']
+            : [
+                'greeting', 'theme', 'affirmation', 'breakfast',
+                ...(flowHasTaskReview ? ['taskReview' as MorningStep] : []),
+                'transition', 'tasks',
+            ]
         const currentIndex = order.indexOf(step)
         const nextStep = order[currentIndex + 1]
         if (nextStep) setStep(nextStep)
@@ -402,6 +396,42 @@ export default function MorningFlow() {
                 />
             )}
 
+            {step === 'weeklyReset' && (
+                <WeeklyResetFlow
+                    weeks={weeks}
+                    setWeeks={setWeeks}
+                    onClose={() => {
+                        const behavior = (weeks[weekId] as any)?.weeklyReset?.behavior?.trim()
+                        if (behavior && !todaysReflection) {
+                            const newReflection: Reflection = {
+                                id: crypto.randomUUID(),
+                                text: behavior,
+                                createdAt: new Date().toISOString(),
+                                dayId,
+                            }
+                            setWeeks((prev) => {
+                                const existing = prev[weekId]
+                                if (!existing) return prev
+                                return {
+                                    ...prev,
+                                    [weekId]: {
+                                        ...existing,
+                                        reflections: [newReflection, ...existing.reflections.filter(r => r.dayId !== dayId)],
+                                    },
+                                }
+                            })
+                        }
+                        next()
+                    }}
+                    journalByDay={journalByDay}
+                    chatsByDay={chatsByDay}
+                    tasks={tasks}
+                    setTasks={setTasks}
+                    todayDayId={dayId}
+                    yesterdayDayId={yesterdayId}
+                />
+            )}
+
             {/* Task review step — only appears in flow if yesterday had incomplete tasks */}
             {step === 'taskReview' && (
                 <TaskReviewStep
@@ -436,7 +466,6 @@ export default function MorningFlow() {
                     tracker={todaysTracker}
                     onTrackerChange={updateTracker}
                     calendarEntriesByDay={calendarEntriesByDay}
-                    showResetNudge={showResetNudge}
                     onOpenJournal={() => setShowJournal(true)}
                     onOpenCalendar={() => setShowCalendar(true)}
                     onOpenWeeklyReset={() => setIsWeeklyResetOpen(true)}
@@ -472,6 +501,7 @@ export default function MorningFlow() {
                     onUpdateEntry={updateCalendarEntry}
                     onDeleteEntry={deleteCalendarEntry}
                     onTrackerChange={(forDayId, updated) => setTrackersByDay(prev => ({ ...prev, [forDayId]: updated }))}
+                    onMealsChange={(forDayId, updated) => setMealsByDay(prev => ({ ...prev, [forDayId]: updated }))}
                     onClose={() => setShowCalendar(false)}
                 />
             )}

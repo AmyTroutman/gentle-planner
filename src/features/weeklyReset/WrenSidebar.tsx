@@ -23,6 +23,12 @@ type Props = {
     stepLabel: string
 }
 
+const STEP_FALLBACKS: Partial<Record<WeeklyResetStep, string>> = {
+    lookback: "Let's look back at this week. What felt meaningful? What asked a lot of you?",
+    theme: "What's been on your mind? What wants to guide you into this week?",
+    tasks: "Here's what's still open. What do you want to carry forward — and what can you let go?",
+}
+
 export default function WrenSidebar({
     messages,
     onMessagesChange,
@@ -39,22 +45,32 @@ export default function WrenSidebar({
     const inputRef = useRef<HTMLTextAreaElement>(null)
     const prevStepRef = useRef<WeeklyResetStep | null>(null)
 
+    // Track which steps Wren has already opened so we don't repeat on back navigation
+    const visitedStepsRef = useRef<Set<WeeklyResetStep>>(new Set())
+
     useEffect(() => {
         bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
     }, [messages, isLoading])
 
-    // Auto-open message when step changes or on first load
     useEffect(() => {
-        const stepChanged = prevStepRef.current !== null && prevStepRef.current !== context.currentStep
+        const currentStep = context.currentStep
+        const stepChanged = prevStepRef.current !== null && prevStepRef.current !== currentStep
         const isFirstLoad = !initialized && messages.length === 0
+        const alreadyVisited = visitedStepsRef.current.has(currentStep)
 
-        if (isFirstLoad || stepChanged) {
-            prevStepRef.current = context.currentStep
+        if (isFirstLoad || (stepChanged && !alreadyVisited)) {
+            prevStepRef.current = currentStep
+            visitedStepsRef.current.add(currentStep)
             setInitialized(true)
             sendOpeningMessage()
         } else if (!initialized) {
-            prevStepRef.current = context.currentStep
+            // Messages already exist (e.g. persisted from Firestore) — mark all as visited
+            prevStepRef.current = currentStep
+            visitedStepsRef.current.add(currentStep)
             setInitialized(true)
+        } else if (stepChanged) {
+            // Stepped back to a visited step — just update the ref, no new message
+            prevStepRef.current = currentStep
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [context.currentStep])
@@ -83,7 +99,7 @@ export default function WrenSidebar({
         } catch {
             const fallback: ChatMessage = {
                 role: 'assistant',
-                content: "I'm here whenever you're ready.",
+                content: STEP_FALLBACKS[context.currentStep] ?? "I'm here whenever you're ready.",
                 createdAt: new Date().toISOString(),
             }
             onMessagesChange([...messages, fallback])
@@ -163,7 +179,7 @@ export default function WrenSidebar({
                 alignItems: 'center',
                 gap: '0.5rem',
             }}>
-                <AnimatedWren size={48} />                
+                <AnimatedWren size={48} />
                 <span style={{
                     fontWeight: 600,
                     fontSize: '0.9rem',
@@ -225,7 +241,6 @@ export default function WrenSidebar({
                     </div>
                 )}
 
-                {/* Suggest next step button */}
                 {pendingNext && !isLoading && (
                     <div style={{ display: 'flex', justifyContent: 'flex-start', marginTop: '0.25rem' }}>
                         <button

@@ -25,84 +25,32 @@ function Row({
     onSave: (text: string) => void
     onClear: () => void
 }) {
-    const [editing, setEditing] = useState(false)
     const [text, setText] = useState(value ?? '')
+
+    function commit() {
+        const cleaned = text.trim()
+        if (cleaned) onSave(cleaned)
+        else onClear()
+    }
 
     return (
         <div style={{ display: 'grid', gap: '0.35rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                <strong style={{ fontSize: '0.95rem' }}>{label}</strong>
-                {value && !editing && (
-                    <button
-                        onClick={onClear}
-                        style={{ background: 'transparent', border: 'none', color: 'var(--muted)', cursor: 'pointer' }}
-                    >
-                        Clear
-                    </button>
-                )}
-            </div>
-
-            {!editing ? (
-                <button
-                    onClick={() => {
-                        setText(value ?? '')
-                        setEditing(true)
-                    }}
-                    style={{
-                        textAlign: 'left',
-                        padding: '0.6rem 0.7rem',
-                        borderRadius: 12,
-                        border: '1px solid #d1d5db',
-                        background: 'white',
-                        color: value ? 'var(--text)' : 'var(--muted)',
-                    }}
-                >
-                    {value ? value : 'Add…'}
-                </button>
-            ) : (
-                <div style={{ display: 'grid', gap: '0.5rem' }}>
-                    <input
-                        value={text}
-                        onChange={(e) => setText(e.target.value)}
-                        placeholder="Type…"
-                        style={{
-                            width: '100%',
-                            padding: '0.6rem 0.7rem',
-                            borderRadius: 12,
-                            border: '1px solid #d1d5db',
-                        }}
-                    />
-                    <div style={{ display: 'flex', gap: '0.5rem' }}>
-                        <button
-                            onClick={() => {
-                                const cleaned = text.trim()
-                                if (cleaned) onSave(cleaned)
-                                setEditing(false)
-                            }}
-                            style={{
-                                padding: '0.5rem 0.7rem',
-                                borderRadius: 10,
-                                border: '1px solid #d1d5db',
-                                background: 'white',
-                            }}
-                        >
-                            Save
-                        </button>
-                        <button
-                            onClick={() => setEditing(false)}
-                            style={{
-                                padding: '0.5rem 0.7rem',
-                                borderRadius: 10,
-                                border: '1px solid #d1d5db',
-                                background: 'transparent',
-                                color: 'var(--muted)',
-                            }}
-                        >
-                            Cancel
-                        </button>
-                    </div>
-                </div>
-            )}
+            <strong style={{ fontSize: '0.95rem' }}>{label}</strong>
+            <input
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { commit(); (e.target as HTMLInputElement).blur() } }}
+                onBlur={commit}
+                placeholder="Add…"
+                style={{
+                    padding: '0.6rem 0.7rem',
+                    borderRadius: 12,
+                    border: '1px solid #d1d5db',
+                    fontSize: '0.9rem',
+                    fontFamily: 'inherit',
+                    color: text ? 'var(--text)' : 'var(--muted)',
+                }}
+            />
         </div>
     )
 }
@@ -124,6 +72,7 @@ export default function MealsAside({
             <h3 style={{ margin: 0 }}>Meals</h3>
 
             <Row
+                key={`breakfast-${meals.breakfast ?? ''}`}
                 label="Breakfast"
                 value={meals.breakfast}
                 onSave={(t) => onSetMeal('breakfast', t)}
@@ -131,6 +80,7 @@ export default function MealsAside({
             />
 
             <Row
+                key={`lunch-${meals.lunch ?? ''}`}
                 label="Lunch"
                 value={meals.lunch}
                 onSave={(t) => onSetMeal('lunch', t)}
@@ -138,6 +88,7 @@ export default function MealsAside({
             />
 
             <Row
+                key={`dinner-${meals.dinner ?? ''}`}
                 label="Dinner"
                 value={meals.dinner}
                 onSave={(t) => onSetMeal('dinner', t)}

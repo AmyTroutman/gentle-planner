@@ -7,6 +7,7 @@ import type { ChatMessage } from '../journal/journal.types'
 import type { CalendarEntry, CalendarTag, DayTracker, TrackerTag } from './calendar.types'
 import { getTasksForDay, getMonthTasks, moveTaskToToday, moveTaskToWeek, addTask } from '../tasks/taskHelpers'
 import TrackerAside from './TrackerAside'
+import MealsAside from '../meals/MealsAside'
 
 const TAG_OPTIONS: CalendarTag[] = ['event', 'game']
 
@@ -41,6 +42,7 @@ type Props = {
     onUpdateEntry: (dayId: string, entry: CalendarEntry) => void
     onDeleteEntry: (dayId: string, entryId: string) => void
     onTrackerChange: (dayId: string, tracker: DayTracker) => void
+    onMealsChange: (dayId: string, meals: DailyMeals) => void
     onClose: () => void
 }
 
@@ -155,6 +157,7 @@ export default function CalendarPage({
     onUpdateEntry,
     onDeleteEntry,
     onTrackerChange,
+    onMealsChange,
     onClose,
 }: Props) {
     const todayId = getDayId(new Date())
@@ -197,12 +200,46 @@ export default function CalendarPage({
     const weekId = useMemo(() => getWeekId(new Date(`${selectedDayId}T12:00:00`)), [selectedDayId])
     const week = weeks[weekId]
     const dayTasks = getTasksForDay(tasks, selectedDayId)
-    const meals = mealsByDay[selectedDayId]
     const journal = journalByDay[selectedDayId]
     const chat: ChatMessage[] = chatsByDay[selectedDayId] ?? []
     const dayReflections = (week?.reflections ?? []).filter(r => r.dayId === selectedDayId)
 
     const selectedTracker: DayTracker = trackersByDay[selectedDayId] ?? { period: false, symptoms: [], medications: false }
+    const selectedMeals: DailyMeals = mealsByDay[selectedDayId] ?? { snacks: [], drinks: [] }
+
+    function setSingleMeal(type: 'breakfast' | 'lunch' | 'dinner', text: string) {
+        const current = mealsByDay[selectedDayId] ?? { snacks: [], drinks: [] }
+        onMealsChange(selectedDayId, { ...current, [type]: text })
+    }
+
+    function clearSingleMeal(type: 'breakfast' | 'lunch' | 'dinner') {
+        const current = mealsByDay[selectedDayId] ?? { snacks: [], drinks: [] }
+        const next = { ...current }
+        delete (next as any)[type]
+        onMealsChange(selectedDayId, next)
+    }
+
+    function addSnack(text: string) {
+        const current = mealsByDay[selectedDayId] ?? { snacks: [], drinks: [] }
+        const snack = { id: crypto.randomUUID(), text, createdAt: new Date().toISOString() }
+        onMealsChange(selectedDayId, { ...current, snacks: [snack, ...current.snacks] })
+    }
+
+    function deleteSnack(id: string) {
+        const current = mealsByDay[selectedDayId] ?? { snacks: [], drinks: [] }
+        onMealsChange(selectedDayId, { ...current, snacks: current.snacks.filter(s => s.id !== id) })
+    }
+
+    function addDrink(text: string) {
+        const current = mealsByDay[selectedDayId] ?? { snacks: [], drinks: [] }
+        const drink = { id: crypto.randomUUID(), text, createdAt: new Date().toISOString() }
+        onMealsChange(selectedDayId, { ...current, drinks: [drink, ...(current.drinks ?? [])] })
+    }
+
+    function deleteDrink(id: string) {
+        const current = mealsByDay[selectedDayId] ?? { snacks: [], drinks: [] }
+        onMealsChange(selectedDayId, { ...current, drinks: (current.drinks ?? []).filter(d => d.id !== id) })
+    }
 
     // Month tasks section
     const allMonthTasks = getMonthTasks(tasks)
@@ -211,7 +248,12 @@ export default function CalendarPage({
     const datedMonthTasks = openMonthTasks.filter(t => t.dueDate?.startsWith(viewMonthPrefix))
     const undatedMonthTasks = openMonthTasks.filter(t => !t.dueDate)
     const [undatedOpen, setUndatedOpen] = useState(false)
-    const [dayTab, setDayTab] = useState<'events' | 'tasks'>('events')
+    const [chatOpen, setChatOpen] = useState(false)
+    const [mainTab, setMainTab] = useState<'day' | 'month'>('day')
+    const [daySubTab, setDaySubTab] = useState<'events' | 'tasks' | 'meals' | 'trackers' | 'journal'>('events')
+    const [monthSubTab, setMonthSubTab] = useState<'events' | 'tasks'>('events')
+    const [eventsFilter, setEventsFilter] = useState<'upcoming' | 'past'>('upcoming')
+    const [tasksFilter, setTasksFilter] = useState<'upcoming' | 'past'>('upcoming')
     const [addingTask, setAddingTask] = useState(false)
     const [newTaskTitle, setNewTaskTitle] = useState('')
     const [newTaskDueDate, setNewTaskDueDate] = useState('')
@@ -261,8 +303,12 @@ export default function CalendarPage({
 
     const selectedDate = new Date(`${selectedDayId}T12:00:00`)
     const selectedDateLabel = selectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
+    const dayTabLabel = selectedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    const monthTabLabel = new Date(viewYear, viewMonth, 1).toLocaleDateString('en-US', { month: 'long' })
+    const monthCalendarEntries = Object.entries(calendarEntriesByDay)
+        .filter(([dayId, entries]) => dayId.startsWith(viewMonthPrefix) && entries.length > 0)
+        .sort(([a], [b]) => a.localeCompare(b))
 
-    const hasMeals = meals && (meals.breakfast || meals.lunch || meals.dinner || meals.snacks?.length || meals.drinks?.length)
     const openDayTasks = dayTasks.filter(t => !t.done)
     const doneDayTasks = dayTasks.filter(t => t.done)
 
@@ -370,308 +416,432 @@ export default function CalendarPage({
                 </div>
             </Card>
 
-            {/* ── Day detail panel ── */}
-            <div style={{ display: 'grid', gap: '1rem' }}>
-                {/* Date heading */}
-                <div>
-                    <h3 style={{ margin: 0 }}>{selectedDateLabel}</h3>
-                    {isFuture && <span style={{ fontSize: '0.82rem', color: '#0ea5e9', fontWeight: 600 }}>Future date</span>}
-                    {isPast && <span style={{ fontSize: '0.82rem', color: 'var(--muted)' }}>Past date</span>}
+            {/* ── Tab panel ── */}
+            <div className="folder-tab-layout">
+                <div className="folder-tabs">
+                    <button className={`folder-tab${mainTab === 'day' ? ' active' : ''}`} onClick={() => setMainTab('day')}>{dayTabLabel}</button>
+                    <button className={`folder-tab${mainTab === 'month' ? ' active' : ''}`} onClick={() => setMainTab('month')}>{monthTabLabel}</button>
                 </div>
+                <div className="folder-panel">
 
-                {/* Tabs */}
-                <div style={{ display: 'grid', gap: '1rem' }}>
-                    <div style={{ display: 'flex', gap: '0.5rem', borderBottom: '1px solid #d1d5db', paddingBottom: '0' }}>
-                        {(['events', 'tasks'] as const).map(tab => (
-                            <button
-                                key={tab}
-                                onClick={() => setDayTab(tab)}
-                                style={{
-                                    padding: '0.45rem 1rem',
-                                    border: 'none',
-                                    borderBottom: dayTab === tab ? '2px solid #2c454d' : '2px solid transparent',
-                                    background: 'transparent',
-                                    color: dayTab === tab ? '#2c454d' : 'var(--muted)',
-                                    fontWeight: dayTab === tab ? 600 : 400,
-                                    cursor: 'pointer',
-                                    fontSize: '0.9rem',
-                                    marginBottom: '-1px',
-                                }}
-                            >
-                                {tab === 'events' ? 'Events' : 'Tasks'}
-                            </button>
-                        ))}
-                    </div>
+                    {/* ── Day tab ── */}
+                    {mainTab === 'day' && (
+                        <div style={{ display: 'grid', gap: '1rem' }}>
 
-                    {/* Events tab */}
-                    {dayTab === 'events' && (
-                        <div style={{ display: 'grid', gap: '0.75rem' }}>
-
-                            {selectedEntries.length > 0 && (
-                                <div style={{ display: 'grid', gap: '0.6rem' }}>
-                                    {selectedEntries.map(entry => (
-                                        <div key={entry.id} style={{ padding: '0.75rem 1rem', borderRadius: 12, border: '1px solid #d1d5db', background: entry.done ? '#f9fafb' : 'white' }}>
-                                            {editingEntryId === entry.id ? (
-                                                <EntryForm
-                                                    initial={entry}
-                                                    onSave={(data) => handleUpdateEntry(entry.id, data)}
-                                                    onCancel={() => setEditingEntryId(null)}
-                                                />
-                                            ) : (
-                                                <div style={{ display: 'grid', gap: '0.4rem' }}>
-                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem' }}>
-                                                        <span style={{ fontSize: '0.95rem', fontWeight: 500, color: entry.done ? 'var(--muted)' : 'var(--text)' }}>
-                                                            {entry.title}
-                                                        </span>
-                                                        <div style={{ display: 'flex', gap: '0.4rem', flexShrink: 0 }}>
-                                                            <button onClick={() => setEditingEntryId(entry.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: '0.85rem' }}>Edit</button>
-                                                            <button onClick={() => onDeleteEntry(selectedDayId, entry.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#ef4444', fontSize: '0.85rem' }}>Delete</button>
-                                                        </div>
-                                                    </div>
-                                                    {entry.tags.length > 0 && (
-                                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem' }}>
-                                                            {entry.tags.map(tag => {
-                                                                const c = TAG_COLORS[tag] ?? { bg: '#f3f4f6', border: '#d1d5db', text: '#6b7280' }
-                                                                return (
-                                                                    <span key={tag} style={{ padding: '0.15rem 0.5rem', borderRadius: 20, background: c.bg, border: `1px solid ${c.border}`, color: c.text, fontSize: '0.75rem', fontWeight: 600 }}>
-                                                                        {tag}
-                                                                    </span>
-                                                                )
-                                                            })}
-                                                        </div>
-                                                    )}
-                                                    {entry.notes && <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--muted)', whiteSpace: 'pre-wrap' }}>{entry.notes}</p>}
-                                                </div>
-                                            )}
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-
-                            {selectedEntries.length === 0 && !addingEntry && (
-                                <p style={{ color: 'var(--muted)', margin: 0, fontSize: '0.9rem' }}>No calendar entries for this day.</p>
-                            )}
-
-                            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                                {!addingEntry && (
-                                    <button
-                                        onClick={() => setAddingEntry(true)}
-                                        style={{ padding: '0.5rem 1rem', borderRadius: 10, border: '1px solid #2c454d', background: '#2c454d', color: 'white', cursor: 'pointer', fontSize: '0.9rem' }}
-                                    >+ Add entry</button>
-                                )}
+                            {/* Date subheading */}
+                            <div>
+                                <h3 style={{ margin: 0 }}>{selectedDateLabel}</h3>
+                                {isFuture && <span style={{ fontSize: '0.82rem', color: '#0ea5e9', fontWeight: 600 }}>Future date</span>}
+                                {isPast && <span style={{ fontSize: '0.82rem', color: 'var(--muted)' }}>Past date</span>}
                             </div>
 
-                            {addingEntry && (
-                                <div style={{ padding: '1rem', borderRadius: 14, border: '1px solid #d1d5db', background: 'white' }}>
-                                    <EntryForm onSave={handleAddEntry} onCancel={() => setAddingEntry(false)} />
+                            <div className="month-tab-layout">
+                                <div className="month-side-tabs">
+                                    <button className={`month-side-tab${daySubTab === 'events' ? ' active' : ''}`} onClick={() => setDaySubTab('events')}>Events</button>
+                                    <button className={`month-side-tab${daySubTab === 'tasks' ? ' active' : ''}`} onClick={() => setDaySubTab('tasks')}>Tasks</button>
+                                    <button className={`month-side-tab${daySubTab === 'meals' ? ' active' : ''}`} onClick={() => setDaySubTab('meals')}>Meals</button>
+                                    <button className={`month-side-tab${daySubTab === 'trackers' ? ' active' : ''}`} onClick={() => setDaySubTab('trackers')}>Trackers</button>
+                                    {(journal || chat.length > 0 || dayReflections.length > 0) && <button className={`month-side-tab${daySubTab === 'journal' ? ' active' : ''}`} onClick={() => setDaySubTab('journal')}>Journal</button>}
                                 </div>
-                            )}
-                        </div>
-                    )}
+                                <div className="month-panel">
 
-                    {/* Tasks tab */}
-                    {dayTab === 'tasks' && (
-                        <div style={{ display: 'grid', gap: '0.75rem' }}>
-                            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                                {!addingTask && (
-                                    <button
-                                        onClick={() => setAddingTask(true)}
-                                        style={{ padding: '0.5rem 1rem', borderRadius: 10, border: '1px solid #2c454d', background: '#2c454d', color: 'white', cursor: 'pointer', fontSize: '0.9rem' }}
-                                    >+ Add task</button>
-                                )}
-                            </div>
-
-                            {addingTask && (
-                                <div style={{ padding: '1rem', borderRadius: 14, border: '1px solid #d1d5db', background: 'white', display: 'grid', gap: '0.75rem' }}>
-                                    <input
-                                        autoFocus
-                                        value={newTaskTitle}
-                                        onChange={(e) => setNewTaskTitle(e.target.value)}
-                                        onKeyDown={(e) => { if (e.key === 'Enter') submitNewTask() }}
-                                        placeholder="Task title…"
-                                        style={{ padding: '0.6rem 0.75rem', borderRadius: 10, border: '1px solid #d1d5db', fontSize: '0.95rem', fontFamily: 'inherit' }}
-                                    />
-                                    <input
-                                        type="date"
-                                        value={newTaskDueDate}
-                                        onChange={(e) => setNewTaskDueDate(e.target.value)}
-                                        style={{ padding: '0.6rem 0.75rem', borderRadius: 10, border: '1px solid #d1d5db', fontSize: '0.9rem', fontFamily: 'inherit' }}
-                                    />
-                                    <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                        <button
-                                            onClick={submitNewTask}
-                                            disabled={!newTaskTitle.trim()}
-                                            style={{ padding: '0.55rem 1.1rem', borderRadius: 10, border: '1px solid #2c454d', background: '#2c454d', color: 'white', cursor: newTaskTitle.trim() ? 'pointer' : 'default', opacity: newTaskTitle.trim() ? 1 : 0.5, fontSize: '0.9rem' }}
-                                        >Save</button>
-                                        <button
-                                            onClick={() => { setAddingTask(false); setNewTaskTitle(''); setNewTaskDueDate('') }}
-                                            style={{ padding: '0.55rem 1.1rem', borderRadius: 10, border: '1px solid #d1d5db', background: 'white', cursor: 'pointer', fontSize: '0.9rem' }}
-                                        >Cancel</button>
-                                    </div>
-                                </div>
-                            )}
-
-                            {(datedMonthTasks.length > 0 || undatedMonthTasks.length > 0) ? (
-                                <div style={{ padding: '1rem', borderRadius: 14, border: '1px solid #d1d5db', background: 'white' }}>
-                                    <h4 style={{ margin: '0 0 0.75rem', fontSize: '0.95rem', color: '#2c454d' }}>This Month's Tasks</h4>
-
-                                    {datedMonthTasks.length > 0 && (
-                                        <div style={{ display: 'grid', gap: '0.5rem', marginBottom: undatedMonthTasks.length > 0 ? '0.75rem' : 0 }}>
-                                            {datedMonthTasks.map(task => (
-                                                <div key={task.id} style={{
-                                                    display: 'flex', alignItems: 'center', gap: '0.5rem',
-                                                    padding: '0.5rem 0.65rem', borderRadius: 10,
-                                                    border: '1px solid #d1d5db', background: '#fafafa',
-                                                }}>
-                                                    <span style={{ flex: 1, fontSize: '0.9rem' }}>{task.title}</span>
-                                                    <input
-                                                        type="date"
-                                                        value={task.dueDate ?? ''}
-                                                        onChange={(e) => setTasks(prev => ({
-                                                            ...prev,
-                                                            [task.id]: { ...prev[task.id], dueDate: e.target.value || undefined },
-                                                        }))}
-                                                        style={{ padding: '0.2rem 0.4rem', borderRadius: 8, border: '1px solid #d1d5db', fontSize: '0.8rem' }}
-                                                    />
-                                                    <button style={btnStyle('#2c454d')} onClick={() => setTasks(prev => moveTaskToToday(prev, task.id, todayId, currentWeekId))}>→ Today</button>
-                                                    <button style={btnStyle('#6366f1')} onClick={() => setTasks(prev => moveTaskToWeek(prev, task.id, currentWeekId))}>→ Week</button>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-
-                                    {undatedMonthTasks.length > 0 && (
-                                        <div>
-                                            <button
-                                                onClick={() => setUndatedOpen(o => !o)}
-                                                style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: '0.85rem', padding: 0, marginBottom: '0.5rem' }}
-                                            >
-                                                No date yet ({undatedMonthTasks.length}) {undatedOpen ? '▲' : '▼'}
-                                            </button>
-                                            {undatedOpen && (
-                                                <div style={{ display: 'grid', gap: '0.5rem' }}>
-                                                    {undatedMonthTasks.map(task => (
-                                                        <div key={task.id} style={{
-                                                            display: 'flex', alignItems: 'center', gap: '0.5rem',
-                                                            padding: '0.5rem 0.65rem', borderRadius: 10,
-                                                            border: '1px solid #d1d5db', background: '#fafafa',
-                                                        }}>
-                                                            <span style={{ flex: 1, fontSize: '0.9rem' }}>{task.title}</span>
-                                                            <input
-                                                                type="date"
-                                                                value={task.dueDate ?? ''}
-                                                                onChange={(e) => setTasks(prev => ({
-                                                                    ...prev,
-                                                                    [task.id]: { ...prev[task.id], dueDate: e.target.value || undefined },
-                                                                }))}
-                                                                style={{ padding: '0.2rem 0.4rem', borderRadius: 8, border: '1px solid #d1d5db', fontSize: '0.8rem' }}
-                                                            />
-                                                            <button style={btnStyle('#2c454d')} onClick={() => setTasks(prev => moveTaskToToday(prev, task.id, todayId, currentWeekId))}>→ Today</button>
-                                                            <button style={btnStyle('#6366f1')} onClick={() => setTasks(prev => moveTaskToWeek(prev, task.id, currentWeekId))}>→ Week</button>
+                                    {/* Events panel */}
+                                    {daySubTab === 'events' && (
+                                        <div style={{ display: 'grid', gap: '0.75rem' }}>
+                                            {selectedEntries.length > 0 && (
+                                                <div style={{ display: 'grid', gap: '0.6rem' }}>
+                                                    {selectedEntries.map(entry => (
+                                                        <div key={entry.id} style={{ padding: '0.75rem 1rem', borderRadius: 12, border: '1px solid #d1d5db', background: entry.done ? '#f9fafb' : 'white' }}>
+                                                            {editingEntryId === entry.id ? (
+                                                                <EntryForm
+                                                                    initial={entry}
+                                                                    onSave={(data) => handleUpdateEntry(entry.id, data)}
+                                                                    onCancel={() => setEditingEntryId(null)}
+                                                                />
+                                                            ) : (
+                                                                <div style={{ display: 'grid', gap: '0.4rem' }}>
+                                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem' }}>
+                                                                        <span style={{ fontSize: '0.95rem', fontWeight: 500, color: entry.done ? 'var(--muted)' : 'var(--text)' }}>
+                                                                            {entry.title}
+                                                                        </span>
+                                                                        <div style={{ display: 'flex', gap: '0.4rem', flexShrink: 0 }}>
+                                                                            <button onClick={() => setEditingEntryId(entry.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: '0.85rem' }}>Edit</button>
+                                                                            <button onClick={() => onDeleteEntry(selectedDayId, entry.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#ef4444', fontSize: '0.85rem' }}>Delete</button>
+                                                                        </div>
+                                                                    </div>
+                                                                    {entry.tags.length > 0 && (
+                                                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem' }}>
+                                                                            {entry.tags.map(tag => {
+                                                                                const c = TAG_COLORS[tag] ?? { bg: '#f3f4f6', border: '#d1d5db', text: '#6b7280' }
+                                                                                return (
+                                                                                    <span key={tag} style={{ padding: '0.15rem 0.5rem', borderRadius: 20, background: c.bg, border: `1px solid ${c.border}`, color: c.text, fontSize: '0.75rem', fontWeight: 600 }}>
+                                                                                        {tag}
+                                                                                    </span>
+                                                                                )
+                                                                            })}
+                                                                        </div>
+                                                                    )}
+                                                                    {entry.notes && <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--muted)', whiteSpace: 'pre-wrap' }}>{entry.notes}</p>}
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     ))}
                                                 </div>
                                             )}
+                                            {selectedEntries.length === 0 && !addingEntry && (
+                                                <p style={{ color: 'var(--muted)', margin: 0, fontSize: '0.9rem' }}>No events for this day.</p>
+                                            )}
+                                            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                                                {!addingEntry && (
+                                                    <button
+                                                        onClick={() => setAddingEntry(true)}
+                                                        style={{ padding: '0.5rem 1rem', borderRadius: 10, border: '1px solid #2c454d', background: '#2c454d', color: 'white', cursor: 'pointer', fontSize: '0.9rem' }}
+                                                    >+ Add event</button>
+                                                )}
+                                            </div>
+                                            {addingEntry && (
+                                                <div style={{ padding: '1rem', borderRadius: 14, border: '1px solid #d1d5db', background: 'white' }}>
+                                                    <EntryForm onSave={handleAddEntry} onCancel={() => setAddingEntry(false)} />
+                                                </div>
+                                            )}
                                         </div>
                                     )}
+
+                                    {/* Tasks panel */}
+                                    {daySubTab === 'tasks' && (
+                                        <div style={{ display: 'grid', gap: '0.5rem' }}>
+                                            {dayTasks.length === 0 && (
+                                                <p style={{ color: 'var(--muted)', margin: 0, fontSize: '0.9rem' }}>No tasks for this day.</p>
+                                            )}
+                                            {openDayTasks.length > 0 && (
+                                                <ul style={{ margin: 0, paddingLeft: '1.25rem', display: 'grid', gap: '0.25rem' }}>
+                                                    {openDayTasks.map(t => <li key={t.id} style={{ fontSize: '0.9rem' }}>{t.title}</li>)}
+                                                </ul>
+                                            )}
+                                            {doneDayTasks.length > 0 && (
+                                                <ul style={{ margin: 0, paddingLeft: '1.25rem', color: 'var(--muted)', display: 'grid', gap: '0.25rem' }}>
+                                                    {doneDayTasks.map(t => <li key={t.id} style={{ textDecoration: 'line-through', fontSize: '0.9rem' }}>{t.title}</li>)}
+                                                </ul>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {/* Meals panel */}
+                                    {daySubTab === 'meals' && (
+                                        <MealsAside
+                                            meals={selectedMeals}
+                                            onSetMeal={setSingleMeal}
+                                            onClearMeal={clearSingleMeal}
+                                            onAddSnack={addSnack}
+                                            onDeleteSnack={deleteSnack}
+                                            onAddDrink={addDrink}
+                                            onDeleteDrink={deleteDrink}
+                                        />
+                                    )}
+
+                                    {/* Trackers panel */}
+                                    {daySubTab === 'trackers' && (
+                                        <TrackerAside
+                                            tracker={selectedTracker}
+                                            onChange={(updated) => onTrackerChange(selectedDayId, updated)}
+                                        />
+                                    )}
+
+                                    {/* Journal panel */}
+                                    {daySubTab === 'journal' && (
+                                        <div style={{ display: 'grid', gap: '1.25rem' }}>
+                                            {journal && (
+                                                <div style={{ display: 'grid', gap: '0.4rem' }}>
+                                                    <strong style={{ fontSize: '0.8rem', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Journal</strong>
+                                                    <p style={{ margin: 0, whiteSpace: 'pre-wrap', lineHeight: 1.7, fontSize: '0.95rem' }}>{journal}</p>
+                                                </div>
+                                            )}
+                                            {dayReflections.length > 0 && (
+                                                <div style={{ display: 'grid', gap: '0.4rem' }}>
+                                                    <strong style={{ fontSize: '0.8rem', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Reflections</strong>
+                                                    <div style={{ display: 'grid', gap: '0.75rem' }}>
+                                                        {dayReflections.map(r => (
+                                                            <p key={r.id} style={{ margin: 0, fontSize: '0.95rem', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{r.text}</p>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+                                            {chat.length > 0 && (
+                                                <div style={{ display: 'grid', gap: '0.4rem' }}>
+                                                    <button
+                                                        onClick={() => setChatOpen(o => !o)}
+                                                        style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'left' }}
+                                                    >
+                                                        <strong style={{ fontSize: '0.8rem', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Chat ({chat.length})</strong>
+                                                        <span style={{ fontSize: '0.7rem', color: 'var(--muted)' }}>{chatOpen ? '▲' : '▼'}</span>
+                                                    </button>
+                                                    {chatOpen && (
+                                                        <div style={{ display: 'grid', gap: '0.5rem' }}>
+                                                            {chat.map((msg, i) => (
+                                                                <div key={i} style={{
+                                                                    padding: '0.5rem 0.75rem',
+                                                                    borderRadius: 10,
+                                                                    background: msg.role === 'user' ? '#f3f4f6' : '#f0fdf4',
+                                                                    fontSize: '0.88rem',
+                                                                    lineHeight: 1.5,
+                                                                }}>
+                                                                    <span style={{ fontWeight: 600, fontSize: '0.75rem', color: 'var(--muted)', display: 'block', marginBottom: '0.2rem' }}>
+                                                                        {msg.role === 'user' ? 'You' : 'Claude'}
+                                                                    </span>
+                                                                    {msg.content}
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+
                                 </div>
-                            ) : (
-                                <p style={{ color: 'var(--muted)', margin: 0, fontSize: '0.9rem' }}>No month tasks for this period.</p>
-                            )}
+                            </div>
+
                         </div>
                     )}
-                </div>
 
-                {/* Tracker — editable for any day */}
-                <div style={{ padding: '1rem', borderRadius: 14, border: '1px solid #d1d5db', background: 'white' }}>
-                    <TrackerAside
-                        tracker={selectedTracker}
-                        onChange={(updated) => onTrackerChange(selectedDayId, updated)}
-                    />
-                </div>
+                    {/* ── Month tab ── */}
+                    {mainTab === 'month' && (
+                        <div className="month-tab-layout">
+                            <div className="month-side-tabs">
+                                <button className={`month-side-tab${monthSubTab === 'events' ? ' active' : ''}`} onClick={() => setMonthSubTab('events')}>Events</button>
+                                <button className={`month-side-tab${monthSubTab === 'tasks' ? ' active' : ''}`} onClick={() => setMonthSubTab('tasks')}>Tasks</button>
+                            </div>
+                            <div className="month-panel">
 
-                {/* ── History section — only shown for past dates that have data ── */}
-                {!isFuture && (dayTasks.length > 0 || hasMeals || journal || dayReflections.length > 0 || chat.length > 0) && (
-                    <div style={{ display: 'grid', gap: '1rem', marginTop: '0.5rem' }}>
-                        <h4 style={{ margin: 0, color: 'var(--muted)', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                            History
-                        </h4>
+                                {/* Events panel */}
+                                {monthSubTab === 'events' && (
+                                    <div style={{ display: 'grid', gap: '1rem' }}>
 
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                            {/* Day tasks */}
-                            {dayTasks.length > 0 && (
-                                <Card title="Day tasks">
-                                    {openDayTasks.length > 0 && (
-                                        <ul style={{ margin: '0 0 0.5rem', paddingLeft: '1.25rem' }}>
-                                            {openDayTasks.map(t => <li key={t.id} style={{ marginBottom: '0.2rem' }}>{t.title}</li>)}
-                                        </ul>
-                                    )}
-                                    {doneDayTasks.length > 0 && (
-                                        <ul style={{ margin: 0, paddingLeft: '1.25rem', color: 'var(--muted)' }}>
-                                            {doneDayTasks.map(t => <li key={t.id} style={{ textDecoration: 'line-through', marginBottom: '0.2rem' }}>{t.title}</li>)}
-                                        </ul>
-                                    )}
-                                </Card>
-                            )}
-
-                            {/* Meals */}
-                            {hasMeals && (
-                                <Card title="Meals">
-                                    <div style={{ display: 'grid', gap: '0.35rem', fontSize: '0.9rem' }}>
-                                        {meals!.breakfast && <div><strong>Breakfast:</strong> {meals!.breakfast}</div>}
-                                        {meals!.lunch && <div><strong>Lunch:</strong> {meals!.lunch}</div>}
-                                        {meals!.dinner && <div><strong>Dinner:</strong> {meals!.dinner}</div>}
-                                        {meals!.snacks?.length > 0 && <div><strong>Snacks:</strong> {meals!.snacks.map(s => s.text).join(', ')}</div>}
-                                        {meals!.drinks?.length > 0 && <div><strong>Drinks:</strong> {meals!.drinks.map(d => d.text).join(', ')}</div>}
-                                    </div>
-                                </Card>
-                            )}
-                        </div>
-
-                        {/* Reflections */}
-                        {dayReflections.length > 0 && (
-                            <Card title="Reflections">
-                                <div style={{ display: 'grid', gap: '0.5rem' }}>
-                                    {dayReflections.map(r => (
-                                        <p key={r.id} style={{ margin: 0, fontSize: '0.9rem', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
-                                            {r.text}
-                                        </p>
-                                    ))}
-                                </div>
-                            </Card>
-                        )}
-
-                        {/* Journal */}
-                        {journal && (
-                            <Card title="Journal">
-                                <p style={{ margin: 0, whiteSpace: 'pre-wrap', lineHeight: 1.6, fontSize: '0.9rem' }}>{journal}</p>
-                            </Card>
-                        )}
-
-                        {/* Chat */}
-                        {chat.length > 0 && (
-                            <Card title="Chat">
-                                <div style={{ display: 'grid', gap: '0.5rem' }}>
-                                    {chat.map((msg, i) => (
-                                        <div key={i} style={{
-                                            padding: '0.5rem 0.75rem',
-                                            borderRadius: 10,
-                                            background: msg.role === 'user' ? '#f3f4f6' : '#f0fdf4',
-                                            fontSize: '0.88rem',
-                                            lineHeight: 1.5,
-                                        }}>
-                                            <span style={{ fontWeight: 600, fontSize: '0.75rem', color: 'var(--muted)', display: 'block', marginBottom: '0.2rem' }}>
-                                                {msg.role === 'user' ? 'You' : 'Claude'}
-                                            </span>
-                                            {msg.content}
+                                        {/* Past / Upcoming toggle */}
+                                        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                                            <div style={{ display: 'flex', background: '#f3f4f6', borderRadius: 20, padding: '2px', gap: '2px' }}>
+                                                <button
+                                                    onClick={() => setEventsFilter('upcoming')}
+                                                    style={{
+                                                        padding: '0.2rem 0.65rem',
+                                                        borderRadius: 20,
+                                                        border: 'none',
+                                                        background: eventsFilter === 'upcoming' ? 'white' : 'transparent',
+                                                        color: eventsFilter === 'upcoming' ? 'var(--text)' : 'var(--muted)',
+                                                        fontWeight: eventsFilter === 'upcoming' ? 500 : 400,
+                                                        fontSize: '0.82rem',
+                                                        boxShadow: eventsFilter === 'upcoming' ? '0 1px 2px rgba(0,0,0,0.08)' : 'none',
+                                                    }}
+                                                >Upcoming</button>
+                                                <button
+                                                    onClick={() => setEventsFilter('past')}
+                                                    style={{
+                                                        padding: '0.2rem 0.65rem',
+                                                        borderRadius: 20,
+                                                        border: 'none',
+                                                        background: eventsFilter === 'past' ? 'white' : 'transparent',
+                                                        color: eventsFilter === 'past' ? 'var(--text)' : 'var(--muted)',
+                                                        fontWeight: eventsFilter === 'past' ? 500 : 400,
+                                                        fontSize: '0.82rem',
+                                                        boxShadow: eventsFilter === 'past' ? '0 1px 2px rgba(0,0,0,0.08)' : 'none',
+                                                    }}
+                                                >Past</button>
+                                            </div>
+                                            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                                                {!addingEntry && (
+                                                    <button
+                                                        onClick={() => setAddingEntry(true)}
+                                                        style={{ padding: '0.5rem 1rem', borderRadius: 10, border: '1px solid #2c454d', background: '#2c454d', color: 'white', cursor: 'pointer', fontSize: '0.9rem' }}
+                                                    >+ Add event</button>
+                                                )}
+                                            </div>
+                                            {addingEntry && (
+                                                <div style={{ padding: '1rem', borderRadius: 14, border: '1px solid #d1d5db', background: 'white' }}>
+                                                    <EntryForm onSave={handleAddEntry} onCancel={() => setAddingEntry(false)} />
+                                                </div>
+                                            )}
                                         </div>
-                                    ))}
-                                </div>
-                            </Card>
-                        )}
-                    </div>
-                )}
-            </div>
+
+
+                                        {/* Events list */}
+                                        {(() => {
+                                            const filtered = monthCalendarEntries.filter(([dayId]) =>
+                                                eventsFilter === 'upcoming' ? dayId >= todayId : dayId < todayId
+                                            )
+                                            if (filtered.length === 0) return <p style={{ color: 'var(--muted)', margin: 0, fontSize: '0.9rem' }}>No {eventsFilter} events this month.</p>
+                                            return (
+                                                <div style={{ display: 'grid', gap: '0.75rem' }}>
+                                                    {filtered.map(([dayId, entries]) => {
+                                                        const d = new Date(`${dayId}T12:00:00`)
+                                                        const dayLabel = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+                                                        return (
+                                                            <div key={dayId}>
+                                                                <p style={{ margin: '0 0 0.4rem', fontSize: '0.8rem', fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{dayLabel}</p>
+                                                                <div style={{ display: 'grid', gap: '0.4rem' }}>
+                                                                    {entries.map(entry => {
+                                                                        const c = entry.tags[0] ? TAG_COLORS[entry.tags[0]] : null
+                                                                        return (
+                                                                            <div
+                                                                                key={entry.id}
+                                                                                onClick={() => { setSelectedDayId(dayId); setMainTab('day') }}
+                                                                                style={{
+                                                                                    padding: '0.55rem 0.75rem',
+                                                                                    borderRadius: 10,
+                                                                                    border: `1px solid ${c ? c.border : '#d1d5db'}`,
+                                                                                    background: c ? c.bg : 'white',
+                                                                                    cursor: 'pointer',
+                                                                                    fontSize: '0.9rem',
+                                                                                    color: entry.done ? 'var(--muted)' : (c ? c.text : 'var(--text)'),
+                                                                                    textDecoration: entry.done ? 'line-through' : 'none',
+                                                                                }}
+                                                                            >
+                                                                                {entry.title}
+                                                                            </div>
+                                                                        )
+                                                                    })}
+                                                                </div>
+                                                            </div>
+                                                        )
+                                                    })}
+                                                </div>
+                                            )
+                                        })()}
+
+                                    </div>
+                                )}
+
+                                {/* Tasks panel */}
+                                {monthSubTab === 'tasks' && (
+                                    <div style={{ display: 'grid', gap: '0.75rem' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem' }}>
+                                            <div style={{ display: 'flex', background: '#f3f4f6', borderRadius: 20, padding: '2px', gap: '2px' }}>
+                                                <button
+                                                    onClick={() => setTasksFilter('upcoming')}
+                                                    style={{ padding: '0.2rem 0.65rem', borderRadius: 20, border: 'none', background: tasksFilter === 'upcoming' ? 'white' : 'transparent', color: tasksFilter === 'upcoming' ? 'var(--text)' : 'var(--muted)', fontWeight: tasksFilter === 'upcoming' ? 500 : 400, fontSize: '0.82rem', boxShadow: tasksFilter === 'upcoming' ? '0 1px 2px rgba(0,0,0,0.08)' : 'none' }}
+                                                >Upcoming</button>
+                                                <button
+                                                    onClick={() => setTasksFilter('past')}
+                                                    style={{ padding: '0.2rem 0.65rem', borderRadius: 20, border: 'none', background: tasksFilter === 'past' ? 'white' : 'transparent', color: tasksFilter === 'past' ? 'var(--text)' : 'var(--muted)', fontWeight: tasksFilter === 'past' ? 500 : 400, fontSize: '0.82rem', boxShadow: tasksFilter === 'past' ? '0 1px 2px rgba(0,0,0,0.08)' : 'none' }}
+                                                >Past</button>
+                                            </div>
+                                            {!addingTask && tasksFilter === 'upcoming' && (
+                                                <button
+                                                    onClick={() => setAddingTask(true)}
+                                                    style={{ padding: '0.5rem 1rem', borderRadius: 10, border: '1px solid #2c454d', background: '#2c454d', color: 'white', cursor: 'pointer', fontSize: '0.9rem' }}
+                                                >+ Add task</button>
+                                            )}
+                                        </div>
+
+                                        {addingTask && (
+                                            <div style={{ padding: '1rem', borderRadius: 14, border: '1px solid #d1d5db', background: 'white', display: 'grid', gap: '0.75rem' }}>
+                                                <input
+                                                    autoFocus
+                                                    value={newTaskTitle}
+                                                    onChange={(e) => setNewTaskTitle(e.target.value)}
+                                                    onKeyDown={(e) => { if (e.key === 'Enter') submitNewTask() }}
+                                                    placeholder="Task title…"
+                                                    style={{ padding: '0.6rem 0.75rem', borderRadius: 10, border: '1px solid #d1d5db', fontSize: '0.95rem', fontFamily: 'inherit' }}
+                                                />
+                                                <input
+                                                    type="date"
+                                                    value={newTaskDueDate}
+                                                    onChange={(e) => setNewTaskDueDate(e.target.value)}
+                                                    style={{ padding: '0.6rem 0.75rem', borderRadius: 10, border: '1px solid #d1d5db', fontSize: '0.9rem', fontFamily: 'inherit' }}
+                                                />
+                                                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                                    <button
+                                                        onClick={submitNewTask}
+                                                        disabled={!newTaskTitle.trim()}
+                                                        style={{ padding: '0.55rem 1.1rem', borderRadius: 10, border: '1px solid #2c454d', background: '#2c454d', color: 'white', cursor: newTaskTitle.trim() ? 'pointer' : 'default', opacity: newTaskTitle.trim() ? 1 : 0.5, fontSize: '0.9rem' }}
+                                                    >Save</button>
+                                                    <button
+                                                        onClick={() => { setAddingTask(false); setNewTaskTitle(''); setNewTaskDueDate('') }}
+                                                        style={{ padding: '0.55rem 1.1rem', borderRadius: 10, border: '1px solid #d1d5db', background: 'white', cursor: 'pointer', fontSize: '0.9rem' }}
+                                                    >Cancel</button>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {(() => {
+                                            const filteredDated = datedMonthTasks.filter(t =>
+                                                tasksFilter === 'upcoming' ? (t.dueDate ?? '') >= todayId : (t.dueDate ?? '') < todayId
+                                            )
+                                            const filteredUndated = tasksFilter === 'upcoming' ? undatedMonthTasks : []
+                                            return (filteredDated.length > 0 || filteredUndated.length > 0) ? (
+                                                <div style={{ padding: '1rem', borderRadius: 14, border: '1px solid #d1d5db', background: 'white' }}>
+                                                    {filteredDated.length > 0 && (
+                                                        <div style={{ display: 'grid', gap: '0.5rem', marginBottom: filteredUndated.length > 0 ? '0.75rem' : 0 }}>
+                                                            {filteredDated.map(task => (
+                                                                <div key={task.id} style={{
+                                                                    display: 'flex', alignItems: 'center', gap: '0.5rem',
+                                                                    padding: '0.5rem 0.65rem', borderRadius: 10,
+                                                                    border: '1px solid #d1d5db', background: '#fafafa',
+                                                                }}>
+                                                                    <span style={{ flex: 1, fontSize: '0.9rem' }}>{task.title}</span>
+                                                                    <input
+                                                                        type="date"
+                                                                        value={task.dueDate ?? ''}
+                                                                        onChange={(e) => setTasks(prev => ({
+                                                                            ...prev,
+                                                                            [task.id]: { ...prev[task.id], dueDate: e.target.value || undefined },
+                                                                        }))}
+                                                                        style={{ padding: '0.2rem 0.4rem', borderRadius: 8, border: '1px solid #d1d5db', fontSize: '0.8rem' }}
+                                                                    />
+                                                                    <button style={btnStyle('#2c454d')} onClick={() => setTasks(prev => moveTaskToToday(prev, task.id, todayId, currentWeekId))}>→ Today</button>
+                                                                    <button style={btnStyle('#6366f1')} onClick={() => setTasks(prev => moveTaskToWeek(prev, task.id, currentWeekId))}>→ Week</button>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                    {filteredUndated.length > 0 && (
+                                                        <div>
+                                                            <button
+                                                                onClick={() => setUndatedOpen(o => !o)}
+                                                                style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: '0.85rem', padding: 0, marginBottom: '0.5rem' }}
+                                                            >
+                                                                No date yet ({filteredUndated.length}) {undatedOpen ? '▲' : '▼'}
+                                                            </button>
+                                                            {undatedOpen && (
+                                                                <div style={{ display: 'grid', gap: '0.5rem' }}>
+                                                                    {filteredUndated.map(task => (
+                                                                        <div key={task.id} style={{
+                                                                            display: 'flex', alignItems: 'center', gap: '0.5rem',
+                                                                            padding: '0.5rem 0.65rem', borderRadius: 10,
+                                                                            border: '1px solid #d1d5db', background: '#fafafa',
+                                                                        }}>
+                                                                            <span style={{ flex: 1, fontSize: '0.9rem' }}>{task.title}</span>
+                                                                            <input
+                                                                                type="date"
+                                                                                value={task.dueDate ?? ''}
+                                                                                onChange={(e) => setTasks(prev => ({
+                                                                                    ...prev,
+                                                                                    [task.id]: { ...prev[task.id], dueDate: e.target.value || undefined },
+                                                                                }))}
+                                                                                style={{ padding: '0.2rem 0.4rem', borderRadius: 8, border: '1px solid #d1d5db', fontSize: '0.8rem' }}
+                                                                            />
+                                                                            <button style={btnStyle('#2c454d')} onClick={() => setTasks(prev => moveTaskToToday(prev, task.id, todayId, currentWeekId))}>→ Today</button>
+                                                                            <button style={btnStyle('#6366f1')} onClick={() => setTasks(prev => moveTaskToWeek(prev, task.id, currentWeekId))}>→ Week</button>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ) : (
+                                                <p style={{ color: 'var(--muted)', margin: 0, fontSize: '0.9rem' }}>No {tasksFilter} tasks for this month.</p>
+                                            )
+                                        })()}
+                                    </div>
+                                )}
+
+                            </div>
+                        </div>
+                    )}
+
+
+                </div>{/* folder-panel */}
+            </div>{/* folder-tab-layout */}
         </section>
     )
 }

@@ -8,7 +8,8 @@ import type { ChatMessage } from '../features/journal/journal.types'
 import type { CalendarEntry, DayTracker } from '../features/calendar/calendar.types'
 import type { NotebooksMap } from '../features/notebooks/notebooks.types'
 
-const USER_ID = 'me'
+const USER_ID = import.meta.env.VITE_USER_DOC_ID ?? 'me'
+console.log("current user: ", USER_ID)
 const USER_REF = () => doc(db, 'users', USER_ID)
 
 export type UserDoc = {

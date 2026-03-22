@@ -12,7 +12,7 @@ type Props = {
 export default function BreakfastStep({ options, onSubmit }: Props) {
     const [selectedBreakfast, setSelectedBreakfast] = useState<string | null>(null)
     const [customBreakfast, setCustomBreakfast] = useState('')
-    const [drink, setDrink] = useState<DrinkChoice>('none')
+    const [drink, setDrink] = useState<DrinkChoice>('caf')
     const [promptDone, setPromptDone] = useState(false)
 
     const breakfastValue = useMemo(() => {
