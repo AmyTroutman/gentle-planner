@@ -411,7 +411,7 @@ export default function WeeklyResetFlow({ weeks, setWeeks, onClose, journalByDay
                             >
                                 <div style={{ display: 'grid', gap: '0.75rem', paddingTop: '0.75rem' }}>
                                     <label style={{ display: 'grid', gap: '0.3rem', fontSize: '0.88rem', color: '#374151' }}>
-                                        What felt meaningful?
+                                        What felt meaningful? What mattered to you most? What made you happy?
                                         <textarea
                                             rows={2}
                                             value={r.lookback.meaningful ?? ''}
@@ -420,7 +420,7 @@ export default function WeeklyResetFlow({ weeks, setWeeks, onClose, journalByDay
                                         />
                                     </label>
                                     <label style={{ display: 'grid', gap: '0.3rem', fontSize: '0.88rem', color: '#374151' }}>
-                                        What asked a lot of you?
+                                        What asked a lot of you, was frustrating or upsetting?
                                         <textarea
                                             rows={2}
                                             value={r.lookback.askedALot ?? ''}
@@ -487,6 +487,7 @@ export default function WeeklyResetFlow({ weeks, setWeeks, onClose, journalByDay
                             yesterdayDayId={yesterdayDayId}
                             todayDayId={todayDayId}
                             weekId={weekId}
+                            prevWeekId={prevWeekId}
                             onDone={finish}
                             isStandalone={false}
                         />

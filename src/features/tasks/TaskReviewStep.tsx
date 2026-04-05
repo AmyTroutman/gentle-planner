@@ -16,6 +16,7 @@ export type TaskReviewProps = {
     yesterdayDayId: string
     todayDayId: string
     weekId: string
+    prevWeekId?: string
     onDone: () => void
     isStandalone?: boolean
 }
@@ -31,19 +32,22 @@ export default function TaskReviewStep({
     yesterdayDayId,
     todayDayId,
     weekId,
+    prevWeekId,
     onDone,
     isStandalone = false,
 }: Props) {
     const yesterdayTasks = getYesterdayIncompleteTasks(tasks, yesterdayDayId)
+    const prevWeekTasks = prevWeekId ? getTasksForWeek(tasks, prevWeekId).filter(t => !t.done) : []
     const todayTasks = getTasksForDay(tasks, todayDayId)
     const weeklyTasks = getTasksForWeek(tasks, weekId)
     const monthTasks = getMonthTasks(tasks).filter(t => !t.done)
 
     const openWeekTasks = weeklyTasks.filter(t => !t.done)
 
-    // Local state only for yesterday tasks — needed for visual feedback since
-    // yesterday's list is read-only (we don't remove from it on action)
+    // Local state only for yesterday/prevWeek tasks — needed for visual feedback since
+    // those lists are read-only (we don't remove from them on action)
     const [yesterdayActioned, setYesterdayActioned] = useState<Record<string, YesterdayAction>>({})
+    const [prevWeekActioned, setPrevWeekActioned] = useState<Record<string, YesterdayAction>>({})
 
     const sectionTitle: React.CSSProperties = {
         fontSize: '1rem',
@@ -74,6 +78,7 @@ export default function TaskReviewStep({
 
     const isEmpty =
         yesterdayTasks.length === 0 &&
+        prevWeekTasks.length === 0 &&
         todayTasks.length === 0 &&
         openWeekTasks.length === 0 &&
         monthTasks.length === 0
@@ -102,6 +107,23 @@ export default function TaskReviewStep({
     }
     function handleDismissYesterday(task: Task) {
         setYesterdayActioned(prev => ({ ...prev, [task.id]: 'dismissed' }))
+    }
+
+    // Prev week handlers
+    function handlePrevWeekToToday(task: Task) {
+        setTasks(prev => moveTaskToToday(prev, task.id, todayDayId, weekId))
+        setPrevWeekActioned(prev => ({ ...prev, [task.id]: 'today' }))
+    }
+    function handlePrevWeekToWeek(task: Task) {
+        setTasks(prev => moveTaskToWeek(prev, task.id, weekId))
+        setPrevWeekActioned(prev => ({ ...prev, [task.id]: 'week' }))
+    }
+    function handlePrevWeekToMonth(task: Task) {
+        setTasks(prev => moveTaskToMonth(prev, task.id))
+        setPrevWeekActioned(prev => ({ ...prev, [task.id]: 'month' }))
+    }
+    function handleDismissPrevWeek(task: Task) {
+        setPrevWeekActioned(prev => ({ ...prev, [task.id]: 'dismissed' }))
     }
 
     return (
@@ -168,7 +190,57 @@ export default function TaskReviewStep({
                     </div>
                 )}
 
-                {/* Section 2: Today's tasks */}
+                {/* Section 2: Last week's incomplete weekly tasks */}
+                {prevWeekTasks.length > 0 && (
+                    <div>
+                        <p style={sectionTitle}>From last week</p>
+                        <p style={sectionSubtitle}>Where should these go?</p>
+                        <div style={{ display: 'grid', gap: '0.6rem' }}>
+                            {prevWeekTasks.map(task => {
+                                const action = prevWeekActioned[task.id]
+                                const isDismissed = action === 'dismissed'
+                                return (
+                                    <div key={task.id} style={{
+                                        ...card,
+                                        background: action ? (isDismissed ? '#f9fafb' : '#f0fdf4') : 'white',
+                                        borderColor: action ? (isDismissed ? '#d1d5db' : '#10b981') : '#d1d5db',
+                                        opacity: isDismissed ? 0.6 : 1,
+                                    }}>
+                                        <span style={{
+                                            fontSize: '0.95rem',
+                                            fontWeight: 500,
+                                            flex: 1,
+                                            paddingTop: '0.1rem',
+                                            color: action ? 'var(--muted)' : 'var(--text)',
+                                        }}>
+                                            {task.title}{subtaskHint(task)}
+                                        </span>
+                                        <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', flexShrink: 0 }}>
+                                            <button
+                                                onClick={() => handlePrevWeekToToday(task)}
+                                                style={actionBtn('#2c454d', action === 'today')}
+                                            >→ Today</button>
+                                            <button
+                                                onClick={() => handlePrevWeekToWeek(task)}
+                                                style={actionBtn('#6366f1', action === 'week')}
+                                            >→ This week</button>
+                                            <button
+                                                onClick={() => handlePrevWeekToMonth(task)}
+                                                style={actionBtn('#0ea5e9', action === 'month')}
+                                            >→ Month</button>
+                                            <button
+                                                onClick={() => handleDismissPrevWeek(task)}
+                                                style={actionBtn('#9ca3af', action === 'dismissed')}
+                                            >Let it go</button>
+                                        </div>
+                                    </div>
+                                )
+                            })}
+                        </div>
+                    </div>
+                )}
+
+                {/* Section 4: Today's tasks */}
                 {todayTasks.length > 0 && (
                     <div>
                         <p style={sectionTitle}>Today</p>
@@ -196,7 +268,7 @@ export default function TaskReviewStep({
                     </div>
                 )}
 
-                {/* Section 3: This week's open tasks */}
+                {/* Section 5: This week's open tasks */}
                 {openWeekTasks.length > 0 && (
                     <div>
                         <p style={sectionTitle}>This week</p>
@@ -217,7 +289,7 @@ export default function TaskReviewStep({
                     </div>
                 )}
 
-                {/* Section 4: Month tasks */}
+                {/* Section 6: Month tasks */}
                 {monthTasks.length > 0 && (
                     <div>
                         <p style={sectionTitle}>On the list this month</p>

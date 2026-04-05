@@ -29,12 +29,12 @@ export default function LookbackStep({ meaningful, askedALot, onSave, onNext, on
                 <>
 
                     <label style={{ display: 'grid', gap: '0.35rem' }}>
-                        <span>What felt meaningful?</span>
+                        <span>What felt meaningful? What mattered to you most? What made you happy?</span>
                         <textarea value={m} onChange={(e) => setM(e.target.value)} rows={4} />
                     </label>
 
                     <label style={{ display: 'grid', gap: '0.35rem' }}>
-                        <span>What asked a lot from you?</span>
+                        <span>What asked a lot from you, was frustrating or upsetting?</span>
                         <textarea value={h} onChange={(e) => setH(e.target.value)} rows={4} />
                     </label>
 
