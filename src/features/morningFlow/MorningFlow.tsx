@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import type { MorningStep, Reflection, WeekData } from './morningFlow.types'
 import { useUserDoc } from '../../hooks/useUserDoc'
 import GreetingStep from './steps/GreetingStep'
@@ -46,6 +46,30 @@ export default function MorningFlow() {
     } = useUserDoc()
 
     const hasCompletedMorningFlow = Boolean(mealsByDay[dayId]?.breakfast)
+
+    const breakfastOptions = useMemo(() => {
+        const seen = new Set<string>()
+        const options: string[] = []
+        const sortedDayIds = Object.keys(mealsByDay).sort().reverse()
+        for (const id of sortedDayIds) {
+            const breakfast = mealsByDay[id]?.breakfast?.trim()
+            if (breakfast) {
+                const key = breakfast.toLowerCase()
+                if (!seen.has(key)) {
+                    seen.add(key)
+                    options.push(breakfast)
+                }
+            }
+        }
+        return options.length > 0 ? options : [
+            'pb banana granola',
+            'breakfast sandwich',
+            'kolaches',
+            'oatmeal',
+            'cinnamon toast',
+            'a banana',
+        ]
+    }, [mealsByDay])
 
     const isSunday = new Date().getDay() === 0
 
@@ -384,14 +408,7 @@ export default function MorningFlow() {
 
             {step === 'breakfast' && (
                 <BreakfastStep
-                    options={[
-                        'pb banana granola',
-                        'breakfast sandwich',
-                        'kolaches',
-                        'oatmeal',
-                        'cinnamon toast',
-                        'a banana',
-                    ]}
+                    options={breakfastOptions}
                     onSubmit={setBreakfastAndDrink}
                 />
             )}

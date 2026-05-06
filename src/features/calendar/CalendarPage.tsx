@@ -9,17 +9,19 @@ import { getTasksForDay, getMonthTasks, moveTaskToToday, moveTaskToWeek, addTask
 import TrackerAside from './TrackerAside'
 import MealsAside from '../meals/MealsAside'
 
-const TAG_OPTIONS: CalendarTag[] = ['event', 'game']
+const TAG_OPTIONS: CalendarTag[] = ['event', 'game', 'work']
 
 const TAG_COLORS: Record<CalendarTag, { bg: string; border: string; text: string }> = {
     event: { bg: '#e0f2fe', border: '#0ea5e9', text: '#0369a1' },
     game: { bg: '#e9feea', border: '#00653e', text: '#004833' },
+    work: { bg: '#e0fdf7', border: '#42f5d7', text: '#0a5248' },
 }
 
 // Dot colors for calendar grid — entries + tracker data
 const ENTRY_DOT_COLORS: Record<CalendarTag, string> = {
     event: '#0ea5e9',
     game: '#00653e',
+    work: '#42f5d7',
 }
 
 const TRACKER_DOT_COLORS: Record<TrackerTag, string> = {
@@ -272,18 +274,22 @@ export default function CalendarPage({
         const entries = calendarEntriesByDay[dayId] ?? []
         const entryTags = new Set<CalendarTag>()
         for (const e of entries) for (const t of e.tags) entryTags.add(t)
-        for (const tag of entryTags) dots.push(ENTRY_DOT_COLORS[tag])
+        for (const tag of entryTags) {
+            if (!activeTagFilter || activeTagFilter === tag) dots.push(ENTRY_DOT_COLORS[tag])
+        }
 
-        // Dot for any month tasks with this dueDate
-        const hasMonthTask = Object.values(tasks).some(t => t.scope === 'month' && t.dueDate === dayId && !t.done)
-        if (hasMonthTask) dots.push('#8b5cf6')
+        if (!activeTagFilter) {
+            // Dot for any month tasks with this dueDate
+            const hasMonthTask = Object.values(tasks).some(t => t.scope === 'month' && t.dueDate === dayId && !t.done)
+            if (hasMonthTask) dots.push('#8b5cf6')
 
-        const tracker = trackersByDay[dayId]
-        if (tracker) {
-            if (tracker.period) dots.push(TRACKER_DOT_COLORS.period)
-            if (tracker.weight != null) dots.push(TRACKER_DOT_COLORS.weight)
-            if (tracker.anxiety != null) dots.push(TRACKER_DOT_COLORS.anxiety)
-            if (tracker.symptoms?.length > 0) dots.push(TRACKER_DOT_COLORS.symptom)
+            const tracker = trackersByDay[dayId]
+            if (tracker) {
+                if (tracker.period) dots.push(TRACKER_DOT_COLORS.period)
+                if (tracker.weight != null) dots.push(TRACKER_DOT_COLORS.weight)
+                if (tracker.anxiety != null) dots.push(TRACKER_DOT_COLORS.anxiety)
+                if (tracker.symptoms?.length > 0) dots.push(TRACKER_DOT_COLORS.symptom)
+            }
         }
         return dots
     }
