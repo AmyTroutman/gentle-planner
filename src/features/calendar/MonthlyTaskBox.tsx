@@ -36,9 +36,7 @@ export default function MonthlyTaskBox({
         if (d < dayId) continue
         const entries = calendarEntriesByDay[d] ?? []
         for (const entry of entries) {
-            if (entry.tags.includes('event') || entry.tags.includes('game')) {
-                upcomingEvents.push({ entry, entryDayId: d })
-            }
+            upcomingEvents.push({ entry, entryDayId: d })
         }
     }
     upcomingEvents.sort((a, b) => a.entryDayId.localeCompare(b.entryDayId))
@@ -65,6 +63,7 @@ export default function MonthlyTaskBox({
     const tagColors: Record<string, string> = {
         event: '#0ea5e9',
         game: '#00653e',
+        work: '#42f5d7',
     }
 
     const hasContent = upcomingEvents.length > 0 || monthTasks.length > 0

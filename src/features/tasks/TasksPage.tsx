@@ -131,6 +131,7 @@ export default function TasksPage({
                             setTasks={setTasks}
                             dayId={dayId}
                             weekId={weekId}
+                            calendarEntries={calendarEntriesByDay[dayId] ?? []}
                         />
                     </Card>
 

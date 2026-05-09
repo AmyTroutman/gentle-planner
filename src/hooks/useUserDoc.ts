@@ -22,6 +22,7 @@ export type UserDoc = {
     calendarEntriesByDay: Record<string, CalendarEntry[]>
     trackersByDay: Record<string, DayTracker>
     notebooks: NotebooksMap
+    breakfastOptions?: string[]
 }
 
 const DEFAULT_USER_DOC: UserDoc = {
@@ -173,6 +174,11 @@ export function useUserDoc() {
         [updateField]
     )
 
+    const setBreakfastOptions = useCallback(
+        (options: string[]) => updateField('breakfastOptions', options),
+        [updateField]
+    )
+
     return {
         loading,
         weeks: data.weeks,
@@ -193,5 +199,7 @@ export function useUserDoc() {
         setTrackersByDay,
         notebooks: data.notebooks,
         setNotebooks,
+        breakfastOptions: data.breakfastOptions,
+        setBreakfastOptions,
     }
 }

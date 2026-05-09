@@ -43,17 +43,18 @@ export default function MorningFlow() {
         notebooks, setNotebooks,
         calendarEntriesByDay, setCalendarEntriesByDay,
         trackersByDay, setTrackersByDay,
+        breakfastOptions: savedBreakfastOptions, setBreakfastOptions,
     } = useUserDoc()
 
     const hasCompletedMorningFlow = Boolean(mealsByDay[dayId]?.breakfast)
 
-    const breakfastOptions = useMemo(() => {
+    const historyBreakfastOptions = useMemo(() => {
         const seen = new Set<string>()
         const options: string[] = []
         const sortedDayIds = Object.keys(mealsByDay).sort().reverse()
         for (const id of sortedDayIds) {
             const breakfast = mealsByDay[id]?.breakfast?.trim()
-            if (breakfast) {
+            if (breakfast && breakfast !== 'Nothing') {
                 const key = breakfast.toLowerCase()
                 if (!seen.has(key)) {
                     seen.add(key)
@@ -70,6 +71,8 @@ export default function MorningFlow() {
             'a banana',
         ]
     }, [mealsByDay])
+
+    const breakfastOptions = savedBreakfastOptions ?? historyBreakfastOptions
 
     const isSunday = new Date().getDay() === 0
 
@@ -409,6 +412,7 @@ export default function MorningFlow() {
             {step === 'breakfast' && (
                 <BreakfastStep
                     options={breakfastOptions}
+                    onUpdateOptions={setBreakfastOptions}
                     onSubmit={setBreakfastAndDrink}
                 />
             )}
